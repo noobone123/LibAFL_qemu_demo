@@ -16,7 +16,7 @@ use libafl_qemu::{
         asan::{init_qemu_with_asan, AsanModule},
         asan_guest::{init_qemu_with_asan_guest, AsanGuestModule},
         cmplog::CmpLogModule,
-        DrCovModule,
+        DrCovModule, InjectionModule,
     },
     Qemu,
 };
@@ -93,7 +93,7 @@ impl Client<'_> {
         };
 
         #[cfg(not(feature = "injections"))]
-        let injection_module = None;
+        let injection_module: Option<InjectionModule> = None;
 
         #[cfg(feature = "injections")]
         let injection_module = self
@@ -114,7 +114,8 @@ impl Client<'_> {
         let harness = Harness::init(qemu).expect("Error setting up harness.");
 
         let is_cmplog = self.options.is_cmplog_core(core_id);
-
+        
+        #[cfg(feature = "injections")]
         let extra_tokens = injection_module
             .as_ref()
             .map(|h| h.tokens.clone())
@@ -125,8 +126,7 @@ impl Client<'_> {
             .qemu(qemu)
             .harness(harness)
             .mgr(mgr)
-            .client_description(client_description)
-            .extra_tokens(extra_tokens);
+            .client_description(client_description);
 
         if self.options.rerun_input.is_some() && self.options.drcov.is_some() {
             // Special code path for re-running inputs with DrCov.

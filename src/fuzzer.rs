@@ -42,8 +42,8 @@ impl Fuzzer {
     pub fn fuzz(&self) -> Result<(), Error> {
         if self.options.tui {
             let monitor = TuiMonitor::builder()
-                .title("QEMU Launcher")
-                .version("0.13.1")
+                .title("H1K0 QEMU Launcher")
+                .version("0.14.1")
                 .enhanced_graphics(true)
                 .build();
             self.launch(monitor)
