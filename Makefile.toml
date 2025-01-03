@@ -67,126 +67,61 @@ LIBPNG_ARCH = "ppc"
 LIBPNG_OPTIMIZATIONS = "no"
 FEATURE = "ppc"
 
-[tasks.unsupported]
-script_runner = "@shell"
-script = '''
-echo "Qemu fuzzer not supported on windows/mac"
-'''
-
-[tasks.target_dir]
-condition = { files_not_exist = ["${CARGO_MAKE_CRATE_TARGET_DIRECTORY}"] }
+[tasks.arch_target_dir]
 script_runner = "@shell"
 script = '''
 mkdir ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
-'''
-
-[tasks.deps_dir]
-dependencies = ["target_dir"]
-condition = { files_not_exist = ["${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/"] }
-script_runner = "@shell"
-script = '''
 mkdir ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/
-'''
-
-[tasks.arch_target_dir]
-dependencies = ["target_dir"]
-condition = { files_not_exist = ["${TARGET_DIR}"] }
-script_runner = "@shell"
-script = '''
 mkdir ${TARGET_DIR}
 '''
 
-[tasks.zlib]
-linux_alias = "zlib_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.zlib_unix_wget]
-dependencies = ["deps_dir"]
-condition = { files_not_exist = [
-  "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/zlib-1.2.13",
-] }
+[tasks.download-tiff]
 script_runner = "@shell"
-# NOTE: There's no specific reason we're using an old version of zlib,
-# but newer versions get moved to fossils/ after a while.
 script = '''
-wget \
-    -O "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/zlib-1.2.13.tar.gz" \
-    https://zlib.net/fossils/zlib-1.2.13.tar.gz
-
-tar \
-    zxvf ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/zlib-1.2.13.tar.gz \
-    -C ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/
+echo "Current Working directory: ${CARGO_MAKE_WORKING_DIRECTORY}"
+wget http://download.osgeo.org/libtiff/tiff-4.0.6.tar.gz -O ${CARGO_MAKE_WORKING_DIRECTORY}/tiff-4.0.6.tar.gz
+tar xf tiff-4.0.6.tar.gz
+mv tiff-4.0.6 tiff
+rm tiff-4.0.6.tar.gz
+mkdir ${TARGET_DIR}/build-tiff
 '''
 
-[tasks.zlib_unix]
-dependencies = ["arch_target_dir", "zlib_unix_wget"]
-condition = { files_not_exist = ["${TARGET_DIR}/build-zlib/libz.a"] }
-script_runner = "@shell"
+[tasks.configure-tiff]
+cwd = "tiff"
 script = '''
-rm -rf ${TARGET_DIR}/build-zlib/
-
-mkdir ${TARGET_DIR}/build-zlib/
-
-cd ${TARGET_DIR}/build-zlib/ && \
-    CC=$CROSS_CC \
-    CFLAGS=${CROSS_CFLAGS} \
-    ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/zlib-1.2.13/configure \
-        --prefix=./zlib
-
-make install
+./configure --prefix="${TARGET_DIR}/build-tiff/" --target aarch64-unknown-linux-gnu --disable-cxx --host x86_64-unknown-linux-gnu CC=aarch64-linux-gnu-gcc
 '''
 
-[tasks.libpng]
-linux_alias = "libpng_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.libpng_unix_wget]
-dependencies = ["deps_dir"]
-condition = { files_not_exist = [
-  "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/libpng-1.6.37",
-] }
-script_runner = "@shell"
+[tasks.build-tiff]
+cwd = "tiff"
 script = '''
-wget \
-    -O "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/v1.6.37.tar.gz" \
-    https://github.com/glennrp/libpng/archive/refs/tags/v1.6.37.tar.gz
-
-tar \
-    -xvf "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/v1.6.37.tar.gz" \
-    -C ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/
+make && make install
 '''
 
-[tasks.libpng_unix]
-dependencies = ["arch_target_dir", "zlib", "libpng_unix_wget"]
-condition = { files_not_exist = ["${TARGET_DIR}/build-png/.libs/libpng16.a"] }
+[tasks.clean-tiff]
 script_runner = "@shell"
 script = '''
-rm -rf ${TARGET_DIR}/build-png/
+rm -rf tiff
+'''
 
-mkdir ${TARGET_DIR}/build-png/
-
-cd ${TARGET_DIR}/build-png/ && \
-    CC=$CROSS_CC \
-    CFLAGS="${CROSS_CFLAGS}" \
-    CPPFLAGS="-I${TARGET_DIR}/build-zlib/zlib/include" \
-    LDFLAGS=-L"${TARGET_DIR}/build-zlib/zlib/lib" \
-    ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/libpng-1.6.37/configure \
-        --enable-shared=no \
-        --with-pic=yes \
-        --enable-hardware-optimizations=${LIBPNG_OPTIMIZATIONS} \
-        --host=${LIBPNG_ARCH} \
-
-make
+[tasks.clean]
+# Disable default `clean` definition
+clear = true
+script_runner = "@shell"
+script = '''
+rm -rf ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
+cargo clean
 '''
 
 [tasks.build]
-linux_alias = "build_unix"
-mac_alias = "build_unix"
-windows_alias = "unsupported"
-
-[tasks.build_unix]
+# Be careful: if no command and args are specified, 
+# the task will execute the default `cargo build` command automatically
+dependencies = ["clean-tiff", 
+                "clean", 
+                "arch_target_dir", 
+                "download-tiff", 
+                "configure-tiff", 
+                "build-tiff"]
 command = "cargo"
 args = [
   "build",
@@ -198,199 +133,6 @@ args = [
   "${TARGET_DIR}",
 ]
 
-[tasks.fuzzer]
-dependencies = ["build"]
-script_runner = "@shell"
-script = '''
-rm -f ${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}
-mv ${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher ${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}
-'''
-
-[tasks.harness]
-linux_alias = "harness_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.harness_unix]
-script_runner = "@shell"
-script = '''
-${CROSS_CXX} \
-    ./harness.cc \
-    $CROSS_CFLAGS \
-    "${TARGET_DIR}/build-png/.libs/libpng16.a" \
-	"${TARGET_DIR}/build-zlib/libz.a" \
-    -I"${TARGET_DIR}/build-png" \
-    -I"${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/libpng-1.6.37" \
-	-I"${TARGET_DIR}/build-zlib/zlib/include" \
-	-L"${TARGET_DIR}/build-zlib/zlib/lib" \
-    -o"${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}" \
-    -lm
-'''
-dependencies = ["libpng"]
-
-[tasks.debug]
-linux_alias = "debug_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.debug_unix]
-command = "${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}"
-args = [
-  "--input",
-  "./corpus",
-  "--output",
-  "${TARGET_DIR}/output/",
-  "--log",
-  "${TARGET_DIR}/output/log.txt",
-  "--cores",
-  "0-7",
-  "--asan-cores",
-  "0-3",
-  "--cmplog-cores",
-  "2-5",
-  "--iterations",
-  "100000",
-  "--verbose",
-  "--",
-  "${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}",
-]
-dependencies = ["harness", "fuzzer"]
-
-[tasks.run]
-linux_alias = "run_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.run_unix]
-command = "${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}"
-args = [
-  "--input",
-  "./corpus",
-  "--output",
-  "${TARGET_DIR}/output/",
-  "--log",
-  "${TARGET_DIR}/output/log.txt",
-  "--cores",
-  "0-7",
-  "--asan-cores",
-  "0-3",
-  "--cmplog-cores",
-  "2-5",
-  "--iterations",
-  "1000000",
-  "--tui",
-  "--",
-  "${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}",
-]
-dependencies = ["harness", "fuzzer"]
-
-[tasks.single]
-linux_alias = "single_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.single_unix]
-command = "${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}"
-args = [
-  "--input",
-  "./corpus",
-  "--output",
-  "${TARGET_DIR}/output/",
-  "--log",
-  "${TARGET_DIR}/output/log.txt",
-  "--cores",
-  "0",
-  "--",
-  "${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}",
-]
-dependencies = ["harness", "fuzzer"]
-
-[tasks.asan]
-linux_alias = "asan_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.asan_unix]
-command = "${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}"
-args = [
-  "--input",
-  "./corpus",
-  "--output",
-  "${TARGET_DIR}/output/",
-  "--log",
-  "${TARGET_DIR}/output/log.txt",
-  "--cores",
-  "0",
-  "--asan-cores",
-  "0",
-  "--",
-  "${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}",
-]
-dependencies = ["harness", "fuzzer"]
-
-[tasks.asan_guest]
-linux_alias = "asan_guest_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.asan_guest_unix]
-command = "${TARGET_DIR}/${PROFILE_DIR}/qemu_launcher-${CARGO_MAKE_PROFILE}"
-args = [
-  "--input",
-  "./corpus",
-  "--output",
-  "${TARGET_DIR}/output/",
-  "--log",
-  "${TARGET_DIR}/output/log.txt",
-  "--cores",
-  "0",
-  "--asan-guest-cores",
-  "0",
-  "--",
-  "${TARGET_DIR}/libpng-harness-${CARGO_MAKE_PROFILE}",
-]
-dependencies = ["harness", "fuzzer"]
-
-[tasks.test]
-linux_alias = "test_unix"
-mac_alias = "unsupported"
-windows_alias = "unsupported"
-
-[tasks.test_unix]
-script_runner = "@shell"
-script = '''
-echo "Profile: ${PROFILE}"
-cd injection_test || exit 1
-make
-mkdir in || true
-echo aaaaaaaaaa > in/a
-timeout 10s "$(find ${TARGET_DIR} -name 'qemu_launcher')" -o out -i in -j ../injections.toml -v -- ./static >/dev/null 2>fuzz.log || true
-if [ -z "$(grep -Ei "found.*injection" fuzz.log)" ]; then
-    echo "Fuzzer does not generate any testcases or any crashes"
-    echo "Logs:"
-    cat fuzz.log
-    exit 1
-else
-    echo "Fuzzer is working"
-fi
-make clean
-#rm -rf in out fuzz.log || true
-'''
-dependencies = ["build_unix"]
-
-[tasks.clean]
-linux_alias = "clean_unix"
-mac_alias = "clean_unix"
-windows_alias = "unsupported"
-
-[tasks.clean_unix]
-# Disable default `clean` definition
-clear = true
-script_runner = "@shell"
-script = '''
-rm -rf ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
-cargo clean
-'''
 
 [tasks.arm]
 command = "cargo"
@@ -398,7 +140,7 @@ args = ["make", "-p", "arm", "run"]
 
 [tasks.aarch64]
 command = "cargo"
-args = ["make", "-p", "aarch64", "run"]
+args = ["make", "-p", "aarch64", "build"]
 
 [tasks.x86_64]
 command = "cargo"
