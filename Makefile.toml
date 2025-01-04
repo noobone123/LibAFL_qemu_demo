@@ -70,32 +70,38 @@ FEATURE = "ppc"
 [tasks.arch_target_dir]
 script_runner = "@shell"
 script = '''
-mkdir ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
-mkdir ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/
-mkdir ${TARGET_DIR}
+mkdir -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
+mkdir -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/deps/
+mkdir -p ${TARGET_DIR}
 '''
 
 [tasks.download-tiff]
 script_runner = "@shell"
 script = '''
-echo "Current Working directory: ${CARGO_MAKE_WORKING_DIRECTORY}"
-wget http://download.osgeo.org/libtiff/tiff-4.0.6.tar.gz -O ${CARGO_MAKE_WORKING_DIRECTORY}/tiff-4.0.6.tar.gz
-tar xf tiff-4.0.6.tar.gz
-mv tiff-4.0.6 tiff
-rm tiff-4.0.6.tar.gz
-mkdir ${TARGET_DIR}/build-tiff
+if [ ! -d "tiff" ]; then
+  echo "Current Working directory: ${CARGO_MAKE_WORKING_DIRECTORY}"
+  wget http://download.osgeo.org/libtiff/tiff-4.0.6.tar.gz -O ${CARGO_MAKE_WORKING_DIRECTORY}/tiff-4.0.6.tar.gz
+  tar xf tiff-4.0.6.tar.gz
+  mv tiff-4.0.6 tiff
+  rm tiff-4.0.6.tar.gz
+  mkdir -p ${TARGET_DIR}/build-tiff
+fi
 '''
 
 [tasks.configure-tiff]
 cwd = "tiff"
 script = '''
-./configure --prefix="${TARGET_DIR}/build-tiff/" --target aarch64-unknown-linux-gnu --disable-cxx --host x86_64-unknown-linux-gnu CC=aarch64-linux-gnu-gcc
+if [ ! -f "${TARGET_DIR}/build-tiff/lib/libtiff.a" ]; then
+  ./configure --prefix="${TARGET_DIR}/build-tiff/" --target aarch64-unknown-linux-gnu --disable-cxx --host x86_64-unknown-linux-gnu CC=aarch64-linux-gnu-gcc
+fi
 '''
 
 [tasks.build-tiff]
 cwd = "tiff"
 script = '''
-make && make install
+if [ ! -f "${TARGET_DIR}/build-tiff/lib/libtiff.a" ]; then
+  make && make install
+fi
 '''
 
 [tasks.clean-tiff]
@@ -105,6 +111,7 @@ rm -rf tiff
 '''
 
 [tasks.clean]
+dependencies = ["clean-tiff"]
 # Disable default `clean` definition
 clear = true
 script_runner = "@shell"
@@ -116,9 +123,7 @@ cargo clean
 [tasks.build]
 # Be careful: if no command and args are specified, 
 # the task will execute the default `cargo build` command automatically
-dependencies = ["clean-tiff", 
-                "clean", 
-                "arch_target_dir", 
+dependencies = ["arch_target_dir", 
                 "download-tiff", 
                 "configure-tiff", 
                 "build-tiff"]
