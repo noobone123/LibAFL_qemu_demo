@@ -35,8 +35,8 @@ impl Harness {
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
 
         let start_pc = elf
-            .resolve_symbol("LLVMFuzzerTestOneInput", qemu.load_addr())
-            .ok_or_else(|| Error::empty_optional("Symbol LLVMFuzzerTestOneInput not found"))?;
+            .resolve_symbol("main", qemu.load_addr())
+            .ok_or_else(|| Error::empty_optional("Symbol main not found"))?;
         Ok(start_pc)
     }
 

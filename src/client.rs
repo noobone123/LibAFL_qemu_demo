@@ -72,6 +72,9 @@ impl Client<'_> {
         let mut env = self.env();
         Harness::edit_env(&mut env);
         log::debug!("ENV: {:#?}", env);
+        log::debug!("Client description: {:?}", client_description);
+        log::error!("EEEEEEEError");
+        println!("If --verbose is on, you can see this message from client :)");
 
         let is_asan = self.options.is_asan_core(core_id);
         let is_asan_guest = self.options.is_asan_guest_core(core_id);

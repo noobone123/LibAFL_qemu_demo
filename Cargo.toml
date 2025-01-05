@@ -8,7 +8,7 @@ authors = [
 edition = "2021"
 
 [features]
-default = ["std"]
+default = ["std", "simplemgr"]
 std = []
 clippy = []                     # Only for clippy, don't use.
 
@@ -48,7 +48,8 @@ libafl_bolts = { path = "/home/h1k0/tools/LibAFL/libafl_bolts", features = [
 ] }
 libafl_qemu = { path = "/home/h1k0/tools/LibAFL/libafl_qemu", features = ["usermode"] }
 libafl_targets = { path = "/home/h1k0/tools/LibAFL/libafl_targets" }
-log = { version = "0.4.22", features = ["release_max_level_info"] }
+log = { version = "0.4.22"}
+env_logger = "0.10"
 nix = { version = "0.29.0", features = ["fs"] }
 rangemap = { version = "1.5.1" }
 readonly = { version = "0.2.12" }

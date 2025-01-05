@@ -1,3 +1,5 @@
 /target
 /tiff
 /rootfs
+.gdb_history
+*.core

@@ -28,6 +28,32 @@ use {
 
 use crate::{client::Client, options::FuzzerOptions};
 
+use std::sync::Once;
+use env_logger::{Builder, Env};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static LOGGER_INIT: Once = Once::new();
+
+fn init_logger() {
+    LOGGER_INIT.call_once(|| {
+        Builder::from_env(Env::default().default_filter_or("info"))
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "[{}] {} - {}",
+                    record.level(),
+                    record.module_path().unwrap_or("unknown"),
+                    record.args()
+                )
+            })
+            .target(env_logger::Target::Stdout)
+            .init();
+    });
+
+    eprintln!("Current log level: {:?}", log::max_level());
+    eprintln!("Debug enabled: {}", log::log_enabled!(log::Level::Debug));
+}
+
 pub struct Fuzzer {
     options: FuzzerOptions,
 }
@@ -40,6 +66,11 @@ impl Fuzzer {
     }
 
     pub fn fuzz(&self) -> Result<(), Error> {
+        // This logger is different from following 
+        init_logger();
+        
+        log::debug!("Starting fuzzer with options: {:?}", self.options);
+
         if self.options.tui {
             let monitor = TuiMonitor::builder()
                 .title("H1K0 QEMU Launcher")
@@ -48,6 +79,7 @@ impl Fuzzer {
                 .build();
             self.launch(monitor)
         } else {
+            // This log is used for MultiMonitor to write fuzzing logs
             let log = self.options.log.as_ref().and_then(|l| {
                 OpenOptions::new()
                     .append(true)
@@ -129,7 +161,7 @@ impl Fuzzer {
         }
 
         #[cfg(feature = "simplemgr")]
-        return client.run(None, SimpleEventManager::new(monitor), CoreId(0));
+        return client.run(None, SimpleEventManager::new(monitor), ClientDescription::new(0, 0, CoreId(0)));
 
         // Build and run the Launcher / fuzzer.
         #[cfg(not(feature = "simplemgr"))]
