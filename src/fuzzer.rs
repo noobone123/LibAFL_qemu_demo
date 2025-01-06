@@ -30,7 +30,6 @@ use crate::{client::Client, options::FuzzerOptions};
 
 use std::sync::Once;
 use env_logger::{Builder, Env};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 static LOGGER_INIT: Once = Once::new();
 
@@ -66,10 +65,11 @@ impl Fuzzer {
     }
 
     pub fn fuzz(&self) -> Result<(), Error> {
-        // This logger is different from following 
+        // This logger is different from following `log`, this logger is used for logging info in the fuzzer itself
+        // while `log` is used for logging outputs from MultiMonitor
         init_logger();
         
-        log::debug!("Starting fuzzer with options: {:?}", self.options);
+        log::info!("Starting fuzzer with options: {:?}", self.options);
 
         if self.options.tui {
             let monitor = TuiMonitor::builder()

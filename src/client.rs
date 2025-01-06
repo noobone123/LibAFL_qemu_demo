@@ -73,8 +73,6 @@ impl Client<'_> {
         Harness::edit_env(&mut env);
         log::debug!("ENV: {:#?}", env);
         log::debug!("Client description: {:?}", client_description);
-        log::error!("EEEEEEEError");
-        println!("If --verbose is on, you can see this message from client :)");
 
         let is_asan = self.options.is_asan_core(core_id);
         let is_asan_guest = self.options.is_asan_guest_core(core_id);
@@ -85,12 +83,15 @@ impl Client<'_> {
 
         let (qemu, mut asan, mut asan_lib) = {
             if is_asan {
+                log::info!("Current core id: {} - Init Qemu with ASAN ...", core_id.0);
                 let (emu, asan) = init_qemu_with_asan(&mut args, &mut env)?;
                 (emu, Some(asan), None)
             } else if is_asan_guest {
+                log::info!("Current core id: {} - Init Qemu with ASAN Guest ...", core_id.0);
                 let (emu, asan_lib) = init_qemu_with_asan_guest(&mut args, &mut env)?;
                 (emu, None, Some(asan_lib))
             } else {
+                log::info!("Current core id: {} - Init Qemu ...", core_id.0);
                 (Qemu::init(&args)?, None, None)
             }
         };
@@ -134,6 +135,8 @@ impl Client<'_> {
         if self.options.rerun_input.is_some() && self.options.drcov.is_some() {
             // Special code path for re-running inputs with DrCov.
             // TODO: Add ASan support, injection support
+            log::info!("Current core id: {} - Rerunning input ...", core_id.0);
+
             let drcov = self.options.drcov.as_ref().unwrap();
             let drcov = DrCovModule::builder()
                 .filename(drcov.clone())
@@ -141,6 +144,8 @@ impl Client<'_> {
                 .build();
             instance_builder.build().run(tuple_list!(drcov), state)
         } else if is_asan && is_cmplog {
+            log::info!("Current core id: {} - Running with ASan and CmpLog ...", core_id.0);
+
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     tuple_list!(
@@ -160,6 +165,8 @@ impl Client<'_> {
                 )
             }
         } else if is_asan_guest && is_cmplog {
+            log::info!("Current core id: {} - Running with ASan Guest and CmpLog ...", core_id.0);
+
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     tuple_list!(
@@ -179,6 +186,8 @@ impl Client<'_> {
                 )
             }
         } else if is_asan {
+            log::info!("Current core id: {} - Running with ASan ...", core_id.0);
+
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     tuple_list!(AsanModule::default(asan.take().unwrap()), injection_module),
@@ -191,9 +200,13 @@ impl Client<'_> {
                 )
             }
         } else if is_asan_guest {
+            log::info!("Current core id: {} - Running with ASan Guest ...", core_id.0);
+
             let modules = tuple_list!(AsanGuestModule::default(qemu, &asan_lib.take().unwrap()));
             instance_builder.build().run(modules, state)
         } else if is_cmplog {
+            log::info!("Current core id: {} - Running with CmpLog ...", core_id.0);
+
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     tuple_list!(CmpLogModule::default(), injection_module),
@@ -205,10 +218,14 @@ impl Client<'_> {
                     .run(tuple_list!(CmpLogModule::default()), state)
             }
         } else if let Some(injection_module) = injection_module {
+            log::info!("Current core id: {} - Running with injections ...", core_id.0);
+
             instance_builder
                 .build()
                 .run(tuple_list!(injection_module), state)
         } else {
+            log::info!("Current core id: {} - Running without any modules ...", core_id.0);
+
             instance_builder.build().run(tuple_list!(), state)
         }
     }

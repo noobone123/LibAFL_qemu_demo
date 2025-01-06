@@ -5,7 +5,7 @@ use libafl::{
 };
 use libafl_bolts::AsSlice;
 use libafl_qemu::{
-    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, Regs,
+    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, Regs, QemuExitReason
 };
 
 pub struct Harness {
@@ -29,29 +29,56 @@ impl Harness {
     #[expect(clippy::ptr_arg)]
     pub fn edit_args(_args: &mut Vec<String>) {}
 
-    /// Helper function to find the function we want to fuzz.
-    fn start_pc(qemu: Qemu) -> Result<GuestAddr, Error> {
-        let mut elf_buffer = Vec::new();
-        let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
-
-        let start_pc = elf
-            .resolve_symbol("main", qemu.load_addr())
-            .ok_or_else(|| Error::empty_optional("Symbol main not found"))?;
-        Ok(start_pc)
+    pub fn read_mem_8(&self, addr: GuestAddr, buf: &mut [u8]) -> Result<(), Error> {
+        self.qemu
+            .read_mem(addr, buf)
+            .map_err(|e| Error::unknown(format!("Failed to read memory@{addr:#x}: {e:?}")))
     }
 
     /// Initialize the emulator, run to the entrypoint (or jump there) and return the [`Harness`] struct
     pub fn init(qemu: Qemu) -> Result<Harness, Error> {
-        let start_pc = Self::start_pc(qemu)?;
-        log::debug!("start_pc @ {start_pc:#x}");
+        let mut elf_buffer = Vec::new();
+        let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
+        
+        let load_addr = qemu.load_addr();
+        log::info!("load_addr = {load_addr:#x}");
 
-        qemu.entry_break(start_pc);
+        let main_addr = elf
+            .resolve_symbol("main", qemu.load_addr())
+            .ok_or_else(|| Error::empty_optional("Symbol main not found"))?;
+
+        let start_pc = main_addr + 0x178;
+        let end_pc = main_addr + 0x144;
+
+        log::info!("start_pc @ {start_pc:#x}");
+        log::info!("end_pc @ {end_pc:#x}");
+
+        // qemu.entry_break(start_pc);
+        qemu.set_breakpoint(start_pc);
+        unsafe {
+            match qemu.run() {
+                // It seems that the control will back after the inst at breakpoint addr is executed
+                Ok(QemuExitReason::Breakpoint(_)) => {
+                    log::info!("QEMU hit start breakpoint");
+                    let pc: GuestReg = qemu
+                        .read_reg(Regs::Pc)
+                        .map_err(|e| Error::unknown(format!("Failed to read PC: {e:?}")))?;
+                    log::info!("PC = {pc:#x}");
+                },
+                _ => panic!("Unexpected QEMU exit."),
+            }
+        }
+        qemu.remove_breakpoint(start_pc);
+
+        log::info!("Now LibAFL takes control");
+        
+        // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
+        qemu.set_breakpoint(end_pc);
 
         let ret_addr: GuestAddr = qemu
             .read_return_address()
             .map_err(|e| Error::unknown(format!("Failed to read return address: {e:?}")))?;
-        log::debug!("ret_addr = {ret_addr:#x}");
-        qemu.set_breakpoint(ret_addr);
+        log::info!("ret_addr = {ret_addr:#x}");
 
         let input_addr = qemu
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
@@ -84,6 +111,8 @@ impl Harness {
     pub fn post_fork(&self) {}
 
     pub fn run(&self, input: &BytesInput) -> ExitKind {
+        log::info!("Harness Start running");
+
         self.reset(input).unwrap();
         ExitKind::Ok
     }
