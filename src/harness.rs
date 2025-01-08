@@ -70,15 +70,11 @@ impl Harness {
         }
         qemu.remove_breakpoint(start_pc);
 
+        log::info!("Num Regs: {}", qemu.num_regs());
         log::info!("Now LibAFL takes control");
         
         // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
         qemu.set_breakpoint(end_pc);
-
-        let ret_addr: GuestAddr = qemu
-            .read_return_address()
-            .map_err(|e| Error::unknown(format!("Failed to read return address: {e:?}")))?;
-        log::info!("ret_addr = {ret_addr:#x}");
 
         let input_addr = qemu
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)

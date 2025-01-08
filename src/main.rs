@@ -11,6 +11,7 @@ mod instance;
 mod options;
 #[cfg(target_os = "linux")]
 mod version;
+mod modules;
 
 #[cfg(target_os = "linux")]
 use crate::fuzzer::Fuzzer;

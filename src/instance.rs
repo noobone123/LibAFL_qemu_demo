@@ -34,6 +34,7 @@ use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND}
 use typed_builder::TypedBuilder;
 
 use crate::{harness::Harness, options::FuzzerOptions};
+use crate::modules::register::RegisterResetModule;
 
 pub type ClientState =
     StdState<BytesInput, InMemoryOnDiskCorpus<BytesInput>, StdRand, OnDiskCorpus<BytesInput>>;
@@ -113,7 +114,10 @@ impl<M: Monitor> Instance<'_, M> {
             .address_filter(self.coverage_filter(self.qemu)?)
             .build()?;
 
-        let modules = modules.prepend(edge_coverage_module);
+        let regs_module = RegisterResetModule::new(&self.qemu);
+
+        let modules = modules.prepend(edge_coverage_module)
+            .prepend(regs_module);
 
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
