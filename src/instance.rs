@@ -1,32 +1,48 @@
 use core::fmt::Debug;
-use std::{fs, marker::PhantomData, ops::Range, process, time::Duration};
+use std::{fs, marker::PhantomData, ops::Range, path::PathBuf, process};
 
 #[cfg(feature = "simplemgr")]
 use libafl::events::SimpleEventManager;
 #[cfg(not(feature = "simplemgr"))]
 use libafl::events::{LlmpRestartingEventManager, MonitorTypedEventManager};
 use libafl::{
-    corpus::{Corpus, InMemoryOnDiskCorpus, OnDiskCorpus}, events::{ClientDescription, EventRestarter, NopEventManager}, executors::{Executor, ShadowExecutor}, feedback_or, feedback_or_fast, feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback}, fuzzer::{Evaluator, Fuzzer, StdFuzzer}, inputs::BytesInput, monitors::Monitor, mutators::{
+    corpus::{Corpus, InMemoryOnDiskCorpus, OnDiskCorpus},
+    events::{ClientDescription, EventRestarter, NopEventManager},
+    executors::{Executor, ShadowExecutor},
+    feedback_or, feedback_or_fast,
+    feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback},
+    fuzzer::{Evaluator, Fuzzer, StdFuzzer},
+    inputs::BytesInput,
+    monitors::Monitor,
+    mutators::{
         havoc_mutations, token_mutations::I2SRandReplace, tokens_mutations, StdMOptMutator,
         StdScheduledMutator, Tokens,
-    }, observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver}, schedulers::{
+    },
+    observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver},
+    schedulers::{
         powersched::PowerSchedule, IndexesLenTimeMinimizerScheduler, PowerQueueScheduler,
-    }, stages::{
-        calibrate::CalibrationStage, power::StdPowerMutationalStage, IfStage, ShadowTracingStage,
-        StagesTuple, StatsStage, StdMutationalStage,
-    }, state::{HasCorpus, StdState, UsesState}, Error, HasMetadata, NopFuzzer
+    },
+    stages::{
+        calibrate::CalibrationStage, power::StdPowerMutationalStage, AflStatsStage, IfStage,
+        ShadowTracingStage, StagesTuple, StdMutationalStage,
+    },
+    state::{HasCorpus, StdState, UsesState},
+    Error, HasMetadata, NopFuzzer,
 };
 #[cfg(not(feature = "simplemgr"))]
 use libafl_bolts::shmem::StdShMemProvider;
 use libafl_bolts::{
     ownedref::OwnedMutSlice,
     rands::StdRand,
-    tuples::{tuple_list, Merge, Prepend},
+    tuples::{tuple_list, MatchFirstType, Merge, Prepend},
 };
 use libafl_qemu::{
     elf::EasyElf,
     modules::{
-        cmplog::CmpLogObserver, EmulatorModuleTuple, StdAddressFilter, StdEdgeCoverageModule,
+        cmplog::CmpLogObserver,
+        edges::EdgeCoverageFullVariant,
+        utils::filters::{NopPageFilter, StdAddressFilter},
+        EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, StdEdgeCoverageModule,
     },
     Emulator, GuestAddr, Qemu, QemuExecutor,
 };
@@ -34,7 +50,6 @@ use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND}
 use typed_builder::TypedBuilder;
 
 use crate::{harness::Harness, options::FuzzerOptions};
-use crate::modules::register::RegisterResetModule;
 
 pub type ClientState =
     StdState<BytesInput, InMemoryOnDiskCorpus<BytesInput>, StdRand, OnDiskCorpus<BytesInput>>;
@@ -49,9 +64,6 @@ pub type ClientMgr<M> =
 pub struct Instance<'a, M: Monitor> {
     options: &'a FuzzerOptions,
     /// The harness. We create it before forking, then `take()` it inside the client.
-    #[builder(setter(strip_option))]
-    harness: Option<Harness>,
-    qemu: Qemu,
     mgr: ClientMgr<M>,
     client_description: ClientDescription,
     #[builder(default)]
@@ -61,7 +73,6 @@ pub struct Instance<'a, M: Monitor> {
 }
 
 impl<M: Monitor> Instance<'_, M> {
-    #[allow(clippy::similar_names)] // elf != self
     fn coverage_filter(&self, qemu: Qemu) -> Result<StdAddressFilter, Error> {
         /* Conversion is required on 32-bit targets, but not on 64-bit ones */
         if let Some(includes) = &self.options.include {
@@ -94,8 +105,13 @@ impl<M: Monitor> Instance<'_, M> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn run<ET>(&mut self, modules: ET, state: Option<ClientState>) -> Result<(), Error>
+    #[expect(clippy::too_many_lines)]
+    pub fn run<ET>(
+        &mut self,
+        args: Vec<String>,
+        modules: ET,
+        state: Option<ClientState>,
+    ) -> Result<(), Error>
     where
         ET: EmulatorModuleTuple<ClientState> + Debug,
     {
@@ -111,13 +127,21 @@ impl<M: Monitor> Instance<'_, M> {
 
         let edge_coverage_module = StdEdgeCoverageModule::builder()
             .map_observer(edges_observer.as_mut())
-            .address_filter(self.coverage_filter(self.qemu)?)
             .build()?;
 
-        let regs_module = RegisterResetModule::new(&self.qemu);
+        let modules = modules.prepend(edge_coverage_module);
+        let mut emulator = Emulator::empty()
+            .qemu_parameters(args)
+            .modules(modules)
+            .build()?;
+        let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
+        let qemu = emulator.qemu();
 
-        let modules = modules.prepend(edge_coverage_module)
-            .prepend(regs_module);
+        // update address filter after qemu has been initialized
+        <EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0> as EmulatorModule<ClientState>>::update_address_filter(emulator.modules_mut()
+            .modules_mut()
+            .match_first_type_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
+            .expect("Could not find back the edge module"), qemu, self.coverage_filter(qemu)?);
 
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
@@ -128,7 +152,10 @@ impl<M: Monitor> Instance<'_, M> {
 
         let stats_stage = IfStage::new(
             |_, _, _, _| Ok(self.options.tui),
-            tuple_list!(StatsStage::new(Duration::from_secs(5))),
+            tuple_list!(AflStatsStage::builder()
+                .map_observer(&edges_observer)
+                .stats_file(PathBuf::from("stats.txt"))
+                .build()?),
         );
 
         // Feedback to rate the interestingness of an input
@@ -187,10 +214,6 @@ impl<M: Monitor> Instance<'_, M> {
 
         state.add_metadata(tokens);
 
-        let harness = self
-            .harness
-            .take()
-            .expect("The harness can never be None here!");
         harness.post_fork();
 
         let mut harness = |_emulator: &mut Emulator<_, _, _, _, _>,
@@ -199,8 +222,6 @@ impl<M: Monitor> Instance<'_, M> {
 
         // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
-
-        let emulator = Emulator::empty().qemu(self.qemu).modules(modules).build()?;
 
         if let Some(rerun_input) = &self.options.rerun_input {
             // TODO: We might want to support non-bytes inputs at some point?
@@ -265,7 +286,7 @@ impl<M: Monitor> Instance<'_, M> {
                 5,
             )?;
 
-            let power: StdPowerMutationalStage<_, _, BytesInput, _, _> =
+            let power: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
                 StdPowerMutationalStage::new(mutator);
 
             // The order of the stages matter!
@@ -300,9 +321,8 @@ impl<M: Monitor> Instance<'_, M> {
         stages: &mut ST,
     ) -> Result<(), Error>
     where
-        Z: Fuzzer<E, ClientMgr<M>, ST>
-            + UsesState<State = ClientState>
-            + Evaluator<E, ClientMgr<M>, State = ClientState>,
+        Z: Fuzzer<E, ClientMgr<M>, ClientState, ST>
+            + Evaluator<E, ClientMgr<M>, BytesInput, ClientState>,
         E: UsesState<State = ClientState>,
         ST: StagesTuple<E, ClientMgr<M>, ClientState, Z>,
     {

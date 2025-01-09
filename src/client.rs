@@ -11,14 +11,8 @@ use libafl::{
 use libafl_bolts::{rands::StdRand, tuples::tuple_list};
 #[cfg(feature = "injections")]
 use libafl_qemu::modules::injections::InjectionModule;
-use libafl_qemu::{
-    modules::{
-        asan::{init_qemu_with_asan, AsanModule},
-        asan_guest::{init_qemu_with_asan_guest, AsanGuestModule},
-        cmplog::CmpLogModule,
-        DrCovModule, InjectionModule,
-    },
-    Qemu,
+use libafl_qemu::modules::{
+    asan::AsanModule, asan_guest::AsanGuestModule, cmplog::CmpLogModule, DrCovModule, InjectionModule,
 };
 
 use crate::{
@@ -81,23 +75,8 @@ impl Client<'_> {
             Err(Error::empty_optional("Multiple ASAN modes configured"))?;
         }
 
-        let (qemu, mut asan, mut asan_lib) = {
-            if is_asan {
-                log::info!("Current core id: {} - Init Qemu with ASAN ...", core_id.0);
-                let (emu, asan) = init_qemu_with_asan(&mut args, &mut env)?;
-                (emu, Some(asan), None)
-            } else if is_asan_guest {
-                log::info!("Current core id: {} - Init Qemu with ASAN Guest ...", core_id.0);
-                let (emu, asan_lib) = init_qemu_with_asan_guest(&mut args, &mut env)?;
-                (emu, None, Some(asan_lib))
-            } else {
-                log::info!("Current core id: {} - Init Qemu ...", core_id.0);
-                (Qemu::init(&args)?, None, None)
-            }
-        };
-
         #[cfg(not(feature = "injections"))]
-        let injection_module: Option<InjectionModule> = None;
+        let injection_module = Option::<InjectionModule>::None;
 
         #[cfg(feature = "injections")]
         let injection_module = self
@@ -115,8 +94,6 @@ impl Client<'_> {
                 }
             });
 
-        let harness = Harness::init(qemu).expect("Error setting up harness.");
-
         let is_cmplog = self.options.is_cmplog_core(core_id);
         
         #[cfg(feature = "injections")]
@@ -127,106 +104,90 @@ impl Client<'_> {
 
         let instance_builder = Instance::builder()
             .options(self.options)
-            .qemu(qemu)
-            .harness(harness)
             .mgr(mgr)
             .client_description(client_description);
 
         if self.options.rerun_input.is_some() && self.options.drcov.is_some() {
             // Special code path for re-running inputs with DrCov.
             // TODO: Add ASan support, injection support
-            log::info!("Current core id: {} - Rerunning input ...", core_id.0);
-
             let drcov = self.options.drcov.as_ref().unwrap();
             let drcov = DrCovModule::builder()
                 .filename(drcov.clone())
                 .full_trace(true)
                 .build();
-            instance_builder.build().run(tuple_list!(drcov), state)
+            instance_builder
+                .build()
+                .run(args, tuple_list!(drcov), state)
         } else if is_asan && is_cmplog {
-            log::info!("Current core id: {} - Running with ASan and CmpLog ...", core_id.0);
-
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
+                    args,
                     tuple_list!(
                         CmpLogModule::default(),
-                        AsanModule::default(asan.take().unwrap()),
+                        AsanModule::default(&env),
                         injection_module,
                     ),
                     state,
                 )
             } else {
                 instance_builder.build().run(
-                    tuple_list!(
-                        CmpLogModule::default(),
-                        AsanModule::default(asan.take().unwrap()),
-                    ),
+                    args,
+                    tuple_list!(CmpLogModule::default(), AsanModule::default(&env),),
                     state,
                 )
             }
         } else if is_asan_guest && is_cmplog {
-            log::info!("Current core id: {} - Running with ASan Guest and CmpLog ...", core_id.0);
-
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
+                    args,
                     tuple_list!(
                         CmpLogModule::default(),
-                        AsanGuestModule::default(qemu, &asan_lib.take().unwrap()),
+                        AsanGuestModule::default(&env),
                         injection_module
                     ),
                     state,
                 )
             } else {
                 instance_builder.build().run(
-                    tuple_list!(
-                        CmpLogModule::default(),
-                        AsanGuestModule::default(qemu, &asan_lib.take().unwrap()),
-                    ),
+                    args,
+                    tuple_list!(CmpLogModule::default(), AsanGuestModule::default(&env),),
                     state,
                 )
             }
         } else if is_asan {
-            log::info!("Current core id: {} - Running with ASan ...", core_id.0);
-
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
-                    tuple_list!(AsanModule::default(asan.take().unwrap()), injection_module),
+                    args,
+                    tuple_list!(AsanModule::default(&env), injection_module),
                     state,
                 )
             } else {
-                instance_builder.build().run(
-                    tuple_list!(AsanModule::default(asan.take().unwrap()),),
-                    state,
-                )
+                instance_builder
+                    .build()
+                    .run(args, tuple_list!(AsanModule::default(&env),), state)
             }
         } else if is_asan_guest {
-            log::info!("Current core id: {} - Running with ASan Guest ...", core_id.0);
-
-            let modules = tuple_list!(AsanGuestModule::default(qemu, &asan_lib.take().unwrap()));
-            instance_builder.build().run(modules, state)
+            instance_builder
+                .build()
+                .run(args, tuple_list!(AsanGuestModule::default(&env)), state)
         } else if is_cmplog {
-            log::info!("Current core id: {} - Running with CmpLog ...", core_id.0);
-
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
+                    args,
                     tuple_list!(CmpLogModule::default(), injection_module),
                     state,
                 )
             } else {
                 instance_builder
                     .build()
-                    .run(tuple_list!(CmpLogModule::default()), state)
+                    .run(args, tuple_list!(CmpLogModule::default()), state)
             }
         } else if let Some(injection_module) = injection_module {
-            log::info!("Current core id: {} - Running with injections ...", core_id.0);
-
             instance_builder
                 .build()
-                .run(tuple_list!(injection_module), state)
+                .run(args, tuple_list!(injection_module), state)
         } else {
-            log::info!("Current core id: {} - Running without any modules ...", core_id.0);
-
-            instance_builder.build().run(tuple_list!(), state)
+            instance_builder.build().run(args, tuple_list!(), state)
         }
     }
 }

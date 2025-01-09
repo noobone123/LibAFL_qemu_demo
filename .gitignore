@@ -3,3 +3,4 @@
 /rootfs
 .gdb_history
 *.core
+Cargo.lock
