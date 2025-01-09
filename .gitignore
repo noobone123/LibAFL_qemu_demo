@@ -4,3 +4,4 @@
 .gdb_history
 *.core
 Cargo.lock
+stats.txt

@@ -49,7 +49,7 @@ use libafl_qemu::{
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
 use typed_builder::TypedBuilder;
 
-use crate::{harness::Harness, options::FuzzerOptions};
+use crate::{harness::Harness, modules::register::RegisterResetModule, options::FuzzerOptions};
 
 pub type ClientState =
     StdState<BytesInput, InMemoryOnDiskCorpus<BytesInput>, StdRand, OnDiskCorpus<BytesInput>>;
@@ -128,20 +128,37 @@ impl<M: Monitor> Instance<'_, M> {
         let edge_coverage_module = StdEdgeCoverageModule::builder()
             .map_observer(edges_observer.as_mut())
             .build()?;
+        let reg_reset_module = RegisterResetModule::new();
 
-        let modules = modules.prepend(edge_coverage_module);
+        // TODO: add snapshot module
+        let modules = modules
+            .prepend(edge_coverage_module)
+            .prepend(reg_reset_module);
+
+        log::info!("Qemu Parameters: {:?}", args);
         let mut emulator = Emulator::empty()
             .qemu_parameters(args)
             .modules(modules)
             .build()?;
-        let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
+
         let qemu = emulator.qemu();
 
+        let harness = Harness::init(qemu).expect("Error setting up harness.");
+
         // update address filter after qemu has been initialized
-        <EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0> as EmulatorModule<ClientState>>::update_address_filter(emulator.modules_mut()
-            .modules_mut()
-            .match_first_type_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
-            .expect("Could not find back the edge module"), qemu, self.coverage_filter(qemu)?);
+        <EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0> 
+            as EmulatorModule<ClientState>>::update_address_filter(
+                emulator.modules_mut()
+                    .modules_mut()
+                    .match_first_type_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
+                    .expect("Could not find back the edge module"), 
+                qemu, 
+                self.coverage_filter(qemu)?
+        );
+
+        emulator.modules_mut().modules_mut().match_first_type_mut::<RegisterResetModule>()
+            .expect("Could not find back the register reset module")
+            .save(qemu);
 
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");

@@ -37,6 +37,8 @@ impl Harness {
 
     /// Initialize the emulator, run to the entrypoint (or jump there) and return the [`Harness`] struct
     pub fn init(qemu: Qemu) -> Result<Harness, Error> {
+        log::info!("Initializing harness ...");
+
         let mut elf_buffer = Vec::new();
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
         
@@ -109,7 +111,10 @@ impl Harness {
     pub fn run(&self, input: &BytesInput) -> ExitKind {
         log::info!("Harness Start running");
 
-        self.reset(input).unwrap();
+        unsafe {
+            let _ = self.qemu.run();
+        };
+
         ExitKind::Ok
     }
 
