@@ -28,8 +28,8 @@ use {
 
 use crate::{client::Client, options::FuzzerOptions};
 
-use std::sync::Once;
 use env_logger::{Builder, Env};
+use std::sync::Once;
 
 static LOGGER_INIT: Once = Once::new();
 
@@ -68,7 +68,7 @@ impl Fuzzer {
         // This logger is different from following `log`, this logger is used for logging info in the fuzzer itself
         // while `log` is used for logging outputs from MultiMonitor
         init_logger();
-        
+
         log::info!("Starting fuzzer with options: {:?}", self.options);
 
         if self.options.tui {
@@ -161,7 +161,11 @@ impl Fuzzer {
         }
 
         #[cfg(feature = "simplemgr")]
-        return client.run(None, SimpleEventManager::new(monitor), ClientDescription::new(0, 0, CoreId(0)));
+        return client.run(
+            None,
+            SimpleEventManager::new(monitor),
+            ClientDescription::new(0, 0, CoreId(0)),
+        );
 
         // Build and run the Launcher / fuzzer.
         #[cfg(not(feature = "simplemgr"))]

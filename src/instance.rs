@@ -34,22 +34,23 @@ use libafl_bolts::shmem::StdShMemProvider;
 use libafl_bolts::{
     ownedref::OwnedMutSlice,
     rands::StdRand,
-    tuples::{tuple_list, MatchFirstType, Merge, Prepend},
+    tuples::{tuple_list, Merge, Prepend},
 };
 use libafl_qemu::{
     elf::EasyElf,
     modules::{
-        cmplog::CmpLogObserver,
-        edges::EdgeCoverageFullVariant,
-        utils::filters::{NopPageFilter, StdAddressFilter},
-        EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, StdEdgeCoverageModule,
+        cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
     },
     Emulator, GuestAddr, Qemu, QemuExecutor,
 };
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
 use typed_builder::TypedBuilder;
 
-use crate::{harness::Harness, modules::register::RegisterResetModule, options::FuzzerOptions};
+use crate::{
+    harness::Harness,
+    modules::{InputInjectorModule, RegisterResetModule},
+    options::FuzzerOptions,
+};
 
 pub type ClientState =
     StdState<BytesInput, InMemoryOnDiskCorpus<BytesInput>, StdRand, OnDiskCorpus<BytesInput>>;
@@ -125,16 +126,26 @@ impl<M: Monitor> Instance<'_, M> {
             .track_indices()
         };
 
+        /*
+           Initialize the EmulatorModules and pass them into the Emulator
+        */
         let edge_coverage_module = StdEdgeCoverageModule::builder()
             .map_observer(edges_observer.as_mut())
             .build()?;
         let reg_reset_module = RegisterResetModule::new();
+        // custom snapshot module and make `SnapshotModule` as its inner field is not supported and will cause a panic
+        let snapshot_module = SnapshotModule::new();
+        let input_injector_module = InputInjectorModule::new();
 
-        // TODO: add snapshot module
         let modules = modules
             .prepend(edge_coverage_module)
-            .prepend(reg_reset_module);
+            .prepend(reg_reset_module)
+            .prepend(snapshot_module)
+            .prepend(input_injector_module);
 
+        /*
+           Initialize the Emulator, Qemu (initialized in emulator) and Harness
+        */
         log::info!("Qemu Parameters: {:?}", args);
         let mut emulator = Emulator::empty()
             .qemu_parameters(args)
@@ -142,24 +153,36 @@ impl<M: Monitor> Instance<'_, M> {
             .build()?;
 
         let qemu = emulator.qemu();
-
         let harness = Harness::init(qemu).expect("Error setting up harness.");
 
+        /*
+           Post-update the EmulatorModules after Qemu has been initialized
+        */
         // update address filter after qemu has been initialized
         <EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0> 
             as EmulatorModule<ClientState>>::update_address_filter(
                 emulator.modules_mut()
-                    .modules_mut()
-                    .match_first_type_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
+                    .get_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
                     .expect("Could not find back the edge module"), 
                 qemu, 
                 self.coverage_filter(qemu)?
         );
-
-        emulator.modules_mut().modules_mut().match_first_type_mut::<RegisterResetModule>()
+        // Save the current state of the registers
+        emulator
+            .modules_mut()
+            .get_mut::<RegisterResetModule>()
             .expect("Could not find back the register reset module")
             .save(qemu);
+        // Set the input address for the input injector module
+        emulator
+            .modules_mut()
+            .get_mut::<InputInjectorModule>()
+            .expect("Could not find back the input injector module")
+            .set_input_addr(harness.input_addr);
 
+        /*
+         * Add Other Fuzzer Components
+         */
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
 

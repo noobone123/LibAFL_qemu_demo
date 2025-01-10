@@ -5,15 +5,13 @@ use libafl::{
 };
 use libafl_bolts::AsSlice;
 use libafl_qemu::{
-    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, Regs, QemuExitReason
+    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu,
+    QemuExitReason, Regs,
 };
 
 pub struct Harness {
     qemu: Qemu,
-    input_addr: GuestAddr,
-    pc: GuestAddr,
-    stack_ptr: GuestAddr,
-    ret_addr: GuestAddr,
+    pub input_addr: GuestAddr,
 }
 
 pub const MAX_INPUT_SIZE: usize = 1_048_576; // 1MB
@@ -41,7 +39,7 @@ impl Harness {
 
         let mut elf_buffer = Vec::new();
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
-        
+
         let load_addr = qemu.load_addr();
         log::info!("load_addr = {load_addr:#x}");
 
@@ -66,7 +64,7 @@ impl Harness {
                         .read_reg(Regs::Pc)
                         .map_err(|e| Error::unknown(format!("Failed to read PC: {e:?}")))?;
                     log::info!("PC = {pc:#x}");
-                },
+                }
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
@@ -74,7 +72,7 @@ impl Harness {
 
         log::info!("Num Regs: {}", qemu.num_regs());
         log::info!("Now LibAFL takes control");
-        
+
         // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
         qemu.set_breakpoint(end_pc);
 
@@ -82,25 +80,7 @@ impl Harness {
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
             .map_err(|e| Error::unknown(format!("Failed to map input buffer: {e:}")))?;
 
-        let pc: GuestReg = qemu
-            .read_reg(Regs::Pc)
-            .map_err(|e| Error::unknown(format!("Failed to read PC: {e:?}")))?;
-
-        let stack_ptr: GuestAddr = qemu
-            .read_reg(Regs::Sp)
-            .map_err(|e| Error::unknown(format!("Failed to read stack pointer: {e:?}")))?;
-
-        let ret_addr: GuestAddr = qemu
-            .read_return_address()
-            .map_err(|e| Error::unknown(format!("Failed to read return address: {e:?}")))?;
-
-        Ok(Harness {
-            qemu,
-            input_addr,
-            pc,
-            stack_ptr,
-            ret_addr,
-        })
+        Ok(Harness { qemu, input_addr })
     }
 
     /// If we need to do extra work after forking, we can do that here.
@@ -134,18 +114,6 @@ impl Harness {
                 self.input_addr
             ))
         })?;
-
-        self.qemu
-            .write_reg(Regs::Pc, self.pc)
-            .map_err(|e| Error::unknown(format!("Failed to write PC: {e:?}")))?;
-
-        self.qemu
-            .write_reg(Regs::Sp, self.stack_ptr)
-            .map_err(|e| Error::unknown(format!("Failed to write SP: {e:?}")))?;
-
-        self.qemu
-            .write_return_address(self.ret_addr)
-            .map_err(|e| Error::unknown(format!("Failed to write return address: {e:?}")))?;
 
         self.qemu
             .write_function_argument(CallingConvention::Cdecl, 0, self.input_addr)

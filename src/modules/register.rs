@@ -1,6 +1,7 @@
 use libafl::inputs::UsesInput;
 use libafl_qemu::{
-    modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple}, EmulatorModules, Qemu, QemuParams, Regs
+    modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple},
+    EmulatorModules, Qemu, QemuParams, Regs,
 };
 
 #[derive(Default, Debug)]
@@ -22,7 +23,10 @@ impl RegisterResetModule {
         #[cfg(feature = "i386")]
         let reg_num = 10;
 
-        Self { reg_num, regs: vec![0; reg_num] }
+        Self {
+            reg_num,
+            regs: vec![0; reg_num],
+        }
     }
 
     pub fn save(&mut self, qemu: Qemu) {
@@ -36,20 +40,18 @@ impl RegisterResetModule {
     }
 
     fn restore(&self, qemu: Qemu) {
-        self.regs.iter()
-            .enumerate()
-            .for_each(|(reg_idx, reg_val)| {
-                if let Err(_) = qemu.write_reg(reg_idx as i32, *reg_val) {
-                    log::error!("Failed to restore register {}, skipping ...", reg_idx);
-                }
-            });
+        self.regs.iter().enumerate().for_each(|(reg_idx, reg_val)| {
+            if let Err(_) = qemu.write_reg(reg_idx as i32, *reg_val) {
+                log::error!("Failed to restore register {}, skipping ...", reg_idx);
+            }
+        });
     }
 }
 
 impl<S> EmulatorModule<S> for RegisterResetModule
 where
     S: UsesInput,
-{   
+{
     type ModuleAddressFilter = NopAddressFilter;
 
     fn pre_qemu_init<ET>(

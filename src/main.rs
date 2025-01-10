@@ -7,11 +7,11 @@ mod fuzzer;
 mod harness;
 #[cfg(target_os = "linux")]
 mod instance;
+mod modules;
 #[cfg(target_os = "linux")]
 mod options;
 #[cfg(target_os = "linux")]
 mod version;
-mod modules;
 
 #[cfg(target_os = "linux")]
 use crate::fuzzer::Fuzzer;
