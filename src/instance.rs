@@ -141,6 +141,7 @@ impl<M: Monitor> Instance<'_, M> {
         let snapshot_module = SnapshotModule::new();
         let input_injector_module = InputInjectorModule::new();
 
+        // Be careful the order of the modules ... Snapshot Module should not be the last one because the injected input may be restored?
         let modules = modules
             .prepend(edge_coverage_module)
             .prepend(reg_reset_module)
