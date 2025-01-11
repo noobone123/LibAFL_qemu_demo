@@ -39,7 +39,11 @@ use libafl_bolts::{
 use libafl_qemu::{
     elf::EasyElf,
     modules::{
-        cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
+        cmplog::CmpLogObserver,
+        edges::EdgeCoverageFullVariant,
+        utils::filters::{NopPageFilter, StdAddressFilter},
+        EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule,
+        StdEdgeCoverageModule,
     },
     Emulator, GuestAddr, Qemu, QemuExecutor,
 };
@@ -258,7 +262,7 @@ impl<M: Monitor> Instance<'_, M> {
 
         let mut harness = |_emulator: &mut Emulator<_, _, _, _, _>,
                            _state: &mut _,
-                           input: &BytesInput| harness.run(input);
+                           input: &BytesInput| harness.run();
 
         // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);

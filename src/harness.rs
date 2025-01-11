@@ -88,7 +88,7 @@ impl Harness {
     #[expect(clippy::unused_self)]
     pub fn post_fork(&self) {}
 
-    pub fn run(&self, input: &BytesInput) -> ExitKind {
+    pub fn run(&self) -> ExitKind {
         log::info!("Harness Start running");
 
         unsafe {

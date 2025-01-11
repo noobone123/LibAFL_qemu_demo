@@ -1,4 +1,4 @@
-use libafl::inputs::UsesInput;
+use libafl::inputs::{BytesInput, HasTargetBytes, UsesInput};
 use libafl_qemu::{
     modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple},
     EmulatorModules, GuestAddr, Hook, Qemu, SYS_read, SyscallHookResult,
@@ -9,11 +9,15 @@ pub struct InputInjectorModule {
     // Save the Mutator's BytesInput
     input: Vec<u8>,
     input_addr: GuestAddr,
+    max_size: usize,
 }
 
 impl InputInjectorModule {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            max_size: 1048576,
+            ..Default::default()
+        }
     }
 
     pub fn set_input_addr(&mut self, addr: GuestAddr) {
@@ -23,18 +27,18 @@ impl InputInjectorModule {
 
 impl<S> EmulatorModule<S> for InputInjectorModule
 where
-    S: Unpin + UsesInput,
+    S: Unpin + UsesInput<Input = BytesInput>,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
     fn first_exec<ET>(
-            &mut self,
-            _qemu: Qemu,
-            _emulator_modules: &mut EmulatorModules<ET, S>,
-            _state: &mut S,
-        ) where
-            ET: EmulatorModuleTuple<S>, {
-
+        &mut self,
+        _qemu: Qemu,
+        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _state: &mut S,
+    ) where
+        ET: EmulatorModuleTuple<S>,
+    {
         log::info!("InputInjectorModule::first_exec running ...");
 
         if let Some(hook_id) =
@@ -44,6 +48,26 @@ where
         } else {
             log::error!("Failed to install hook");
         }
+    }
+
+    fn pre_exec<ET>(
+        &mut self,
+        _qemu: Qemu,
+        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _state: &mut S,
+        _input: &<S as UsesInput>::Input,
+    ) where
+        ET: EmulatorModuleTuple<S>,
+    {
+        let tb = _input.target_bytes();
+        if tb.len() > self.max_size {
+            log::error!("Input size too large, skipping ...");
+            return;
+        }
+
+        log::info!("Injecting input of size {} at address {:#x}", tb.len(), self.input_addr);
+        self.input.clear();
+        self.input.extend_from_slice(&tb);
     }
 
     fn address_filter(&self) -> &Self::ModuleAddressFilter {
