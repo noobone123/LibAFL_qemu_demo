@@ -77,7 +77,6 @@ impl Harness {
         qemu.remove_breakpoint(start_pc);
 
         log::info!("Num Regs: {}", qemu.num_regs());
-        log::info!("Now LibAFL takes control");
 
         // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
         qemu.set_breakpoint(end_pc);
@@ -86,6 +85,7 @@ impl Harness {
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
             .map_err(|e| Error::unknown(format!("Failed to map input buffer: {e:}")))?;
 
+        log::info!("Harness initialized");
         Ok(Harness { qemu, input_addr, abort_addr: tiff_cleanup_addr })
     }
 
@@ -98,26 +98,21 @@ impl Harness {
     pub fn run(&self, _qemu: Qemu) -> ExitKind {
         log::info!("Harness Start running");
 
-        _qemu.set_breakpoint(self.abort_addr);
+        // _qemu.set_breakpoint(self.abort_addr);
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
-                Ok(QemuExitReason::Breakpoint(addr)) => {
+                Ok(QemuExitReason::Breakpoint(_)) => {
                     log::info!("QEMU hit start breakpoint");
                     let pc: GuestReg = _qemu
                         .read_reg(Regs::Pc)
                         .expect("Failed to read PC");
                     log::info!("PC = {pc:#x}");
-                    
-                    if addr == self.abort_addr {
-                        log::info!("QEMU hit abort breakpoint");
-                        return ExitKind::Ok;
-                    }
                 }
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
-        _qemu.remove_breakpoint(self.abort_addr);
+        // _qemu.remove_breakpoint(self.abort_addr);
         ExitKind::Ok
     }
 

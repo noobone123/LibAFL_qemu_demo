@@ -390,6 +390,7 @@ impl<M: Monitor> Instance<'_, M> {
             // Else, the parent will not respawn a new child and quit.
             self.mgr.on_restart(state)?;
         } else {
+            log::info!("Ready go into fuzzloop ...");
             fuzzer.fuzz_loop(stages, executor, state, &mut self.mgr)?;
         }
 
