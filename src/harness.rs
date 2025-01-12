@@ -102,17 +102,23 @@ impl Harness {
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
-                Ok(QemuExitReason::Breakpoint(_)) => {
+                Ok(QemuExitReason::Breakpoint(addr)) => {
                     log::info!("QEMU hit start breakpoint");
                     let pc: GuestReg = _qemu
                         .read_reg(Regs::Pc)
                         .expect("Failed to read PC");
                     log::info!("PC = {pc:#x}");
+                    
+                    if addr == self.abort_addr {
+                        log::info!("QEMU hit abort breakpoint");
+                        return ExitKind::Ok;
+                    }
                 }
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
         // _qemu.remove_breakpoint(self.abort_addr);
+
         ExitKind::Ok
     }
 
