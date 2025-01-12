@@ -6,28 +6,15 @@ use libafl::events::SimpleEventManager;
 #[cfg(not(feature = "simplemgr"))]
 use libafl::events::{LlmpRestartingEventManager, MonitorTypedEventManager};
 use libafl::{
-    corpus::{Corpus, InMemoryOnDiskCorpus, OnDiskCorpus},
-    events::{ClientDescription, EventRestarter, NopEventManager},
-    executors::{Executor, ShadowExecutor},
-    feedback_or, feedback_or_fast,
-    feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback},
-    fuzzer::{Evaluator, Fuzzer, StdFuzzer},
-    inputs::BytesInput,
-    monitors::Monitor,
-    mutators::{
+    corpus::{Corpus, InMemoryOnDiskCorpus, OnDiskCorpus}, events::{ClientDescription, EventRestarter, NopEventManager}, executors::{Executor, ShadowExecutor}, feedback_and_fast, feedback_or, feedback_or_fast, feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback}, fuzzer::{Evaluator, Fuzzer, StdFuzzer}, inputs::BytesInput, monitors::Monitor, mutators::{
         havoc_mutations, token_mutations::I2SRandReplace, tokens_mutations, StdMOptMutator,
         StdScheduledMutator, Tokens,
-    },
-    observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver},
-    schedulers::{
+    }, observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver}, schedulers::{
         powersched::PowerSchedule, IndexesLenTimeMinimizerScheduler, PowerQueueScheduler,
-    },
-    stages::{
+    }, stages::{
         calibrate::CalibrationStage, power::StdPowerMutationalStage, AflStatsStage, IfStage,
         ShadowTracingStage, StagesTuple, StdMutationalStage,
-    },
-    state::{HasCorpus, StdState, UsesState},
-    Error, HasMetadata, NopFuzzer,
+    }, state::{HasCorpus, StdState, UsesState}, Error, HasMetadata, NopFuzzer
 };
 #[cfg(not(feature = "simplemgr"))]
 use libafl_bolts::shmem::StdShMemProvider;
@@ -213,7 +200,9 @@ impl<M: Monitor> Instance<'_, M> {
         );
 
         // A feedback to choose if an input is a solution or not
-        let mut objective = feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new());
+        let mut objective = feedback_and_fast!(
+            feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new()), 
+            MaxMapFeedback::new(&edges_observer));
 
         // // If not restarting, create a State from scratch
         let mut state = match state {
