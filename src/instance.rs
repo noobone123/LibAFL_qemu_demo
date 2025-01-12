@@ -141,12 +141,12 @@ impl<M: Monitor> Instance<'_, M> {
         let snapshot_module = SnapshotModule::new();
         let input_injector_module = InputInjectorModule::new();
 
-        // Be careful the order of the modules ... Snapshot Module should not be the last one because the injected input may be restored?
+        // Be careful the order of the modules ... Snapshot Module should be called first.
         let modules = modules
-            .prepend(edge_coverage_module)
+            .prepend(input_injector_module)
             .prepend(reg_reset_module)
             .prepend(snapshot_module)
-            .prepend(input_injector_module);
+            .prepend(edge_coverage_module);
 
         /*
            Initialize the Emulator, Qemu (initialized in emulator) and Harness
@@ -263,7 +263,7 @@ impl<M: Monitor> Instance<'_, M> {
 
         let mut harness = |_emulator: &mut Emulator<_, _, _, _, _>,
                            _state: &mut _,
-                           input: &BytesInput| harness.run();
+                           input: &BytesInput| harness.run(_emulator.qemu());
 
         // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);

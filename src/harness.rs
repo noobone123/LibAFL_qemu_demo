@@ -1,3 +1,5 @@
+use std::process::abort;
+
 use libafl::{
     executors::ExitKind,
     inputs::{BytesInput, HasTargetBytes},
@@ -5,13 +7,13 @@ use libafl::{
 };
 use libafl_bolts::AsSlice;
 use libafl_qemu::{
-    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu,
-    QemuExitReason, Regs,
+    elf::EasyElf, ArchExtras, BackdoorHook, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, QemuExitReason, Regs
 };
 
 pub struct Harness {
     qemu: Qemu,
     pub input_addr: GuestAddr,
+    abort_addr: GuestAddr,
 }
 
 pub const MAX_INPUT_SIZE: usize = 1_048_576; // 1MB
@@ -47,6 +49,10 @@ impl Harness {
             .resolve_symbol("main", qemu.load_addr())
             .ok_or_else(|| Error::empty_optional("Symbol main not found"))?;
 
+        let tiff_cleanup_addr = elf
+            .resolve_symbol("TIFFCleanup", qemu.load_addr())
+            .ok_or_else(|| Error::empty_optional("Symbol TIFFCleanup not found"))?;
+
         let start_pc = main_addr + 0x178;
         let end_pc = main_addr + 0x144;
 
@@ -80,7 +86,7 @@ impl Harness {
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
             .map_err(|e| Error::unknown(format!("Failed to map input buffer: {e:}")))?;
 
-        Ok(Harness { qemu, input_addr })
+        Ok(Harness { qemu, input_addr, abort_addr: tiff_cleanup_addr })
     }
 
     /// If we need to do extra work after forking, we can do that here.
@@ -88,13 +94,29 @@ impl Harness {
     #[expect(clippy::unused_self)]
     pub fn post_fork(&self) {}
 
-    pub fn run(&self) -> ExitKind {
+    pub fn run(&self, _qemu: Qemu) -> ExitKind {
         log::info!("Harness Start running");
 
+        _qemu.set_breakpoint(self.abort_addr);
         unsafe {
-            let _ = self.qemu.run();
-        };
-
+            match _qemu.run() {
+                // It seems that the control will back after the inst at breakpoint addr is executed
+                Ok(QemuExitReason::Breakpoint(addr)) => {
+                    log::info!("QEMU hit start breakpoint");
+                    let pc: GuestReg = _qemu
+                        .read_reg(Regs::Pc)
+                        .expect("Failed to read PC");
+                    log::info!("PC = {pc:#x}");
+                    
+                    if addr == self.abort_addr {
+                        log::info!("QEMU hit abort breakpoint");
+                        return ExitKind::Ok;
+                    }
+                }
+                _ => panic!("Unexpected QEMU exit."),
+            }
+        }
+        _qemu.remove_breakpoint(self.abort_addr);
         ExitKind::Ok
     }
 
