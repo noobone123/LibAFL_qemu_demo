@@ -94,6 +94,7 @@ impl Harness {
     #[expect(clippy::unused_self)]
     pub fn post_fork(&self) {}
 
+    // We didn't do much here, because input has been injected by Custom EmulatorModules
     pub fn run(&self, _qemu: Qemu) -> ExitKind {
         log::info!("Harness Start running");
 
