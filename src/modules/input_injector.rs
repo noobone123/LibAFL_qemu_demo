@@ -169,7 +169,7 @@ where
 
         // I tried to abort the process here, however, unlike what I expected, the fuzzer stopped.
         // abort();
-        SyscallHookResult::new(Some(0))
+        SyscallHookResult::new(None)
     }
     else {
         SyscallHookResult::new(None)
