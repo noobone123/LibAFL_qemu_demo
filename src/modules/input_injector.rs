@@ -166,6 +166,9 @@ where
     }
     else if sys_num == SYS_exit || sys_num == SYS_exit_group {
         log::info!("Exit / Exit group syscall intercepted ...");
+
+        // I tried to abort the process here, however, unlike what I expected, the fuzzer stopped.
+        // abort();
         SyscallHookResult::new(Some(0))
     }
     else {
