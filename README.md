@@ -10,12 +10,12 @@ You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file
 ## Simple Manager for testing and Debugging
 Now I'm testing my harness using following command.
 ```
-./target/aarch64/release/h1k0_qemu_launcher \
+./target/aarch64/release/h1k0_qemu_launcher \                                                                                                                                    ─╯
     --input ./corpus \
     --output ./target/output \
     --log ./target/output/log.txt \
-    --cores 0 \
+    --cores 0 --asan-cores 0 \
     -- \
-    -L ./rootfs --strace \
+    -L ./rootfs \
     ./target/aarch64/build-tiff/bin/tiffinfo -Dcjrsw ./infile
 ```
