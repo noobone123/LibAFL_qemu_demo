@@ -98,7 +98,7 @@ impl Harness {
     pub fn run(&self, _qemu: Qemu) -> ExitKind {
         log::info!("Harness Start running");
 
-        // _qemu.set_breakpoint(self.abort_addr);
+        _qemu.set_breakpoint(self.abort_addr);
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
@@ -117,7 +117,7 @@ impl Harness {
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
-        // _qemu.remove_breakpoint(self.abort_addr);
+        _qemu.remove_breakpoint(self.abort_addr);
 
         ExitKind::Ok
     }
