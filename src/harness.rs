@@ -74,8 +74,6 @@ impl Harness {
         }
         qemu.remove_breakpoint(start_pc);
 
-        log::info!("Num Regs: {}", qemu.num_regs());
-
         // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
         qemu.set_breakpoint(end_pc);
 
@@ -95,7 +93,9 @@ impl Harness {
     // We didn't do much here, because input has been injected by Custom EmulatorModules
     pub fn run(&self, _qemu: Qemu) -> ExitKind {
         log::info!("Harness Start running");
+        log::info!("Num Regs: {}", _qemu.num_regs());
 
+        // Maybe add TiffFree in abort_addrs?
         _qemu.set_breakpoint(self.abort_addr);
         unsafe {
             match _qemu.run() {
