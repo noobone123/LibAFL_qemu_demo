@@ -5,3 +5,4 @@
 *.core
 Cargo.lock
 stats.txt
+output/

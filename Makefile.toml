@@ -10,6 +10,7 @@ TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64"
 LIBPNG_ARCH = "x86_64"
 LIBPNG_OPTIMIZATIONS = "yes"
 FEATURE = "x86_64"
+SANITIZER_FLAGS = { value = "-fsanitize=address", condition = { equals = ["ENABLE_ASAN", "true"] } }
 #LIBAFL_DEBUG_OUTPUT = "1"
 #CUSTOM_QEMU_DIR= "~/qemu-libafl-bridge"
 
@@ -92,7 +93,20 @@ fi
 cwd = "tiff"
 script = '''
 if [ ! -f "${TARGET_DIR}/build-tiff/lib/libtiff.a" ]; then
-  ./configure --prefix="${TARGET_DIR}/build-tiff/" --target aarch64-unknown-linux-gnu --disable-cxx --host x86_64-unknown-linux-gnu CC=aarch64-linux-gnu-gcc
+  if [ "${ENABLE_ASAN}" = "true" ]; then
+    CFLAGS="${CROSS_CFLAGS} ${SANITIZER_FLAGS}"
+    LDFLAGS="${SANITIZER_FLAGS}"
+  else
+    CFLAGS="${CROSS_CFLAGS}"
+    LDFLAGS=""
+  fi
+
+  CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" ./configure \
+    --prefix="${TARGET_DIR}/build-tiff/" \
+    --target=${LIBPNG_ARCH}-unknown-linux-gnu \
+    --disable-cxx \
+    --host=x86_64-unknown-linux-gnu \
+    CC=${CROSS_CC}
 fi
 '''
 
@@ -100,7 +114,14 @@ fi
 cwd = "tiff"
 script = '''
 if [ ! -f "${TARGET_DIR}/build-tiff/lib/libtiff.a" ]; then
-  make && make install
+  if [ "${ENABLE_ASAN}" = "true" ]; then
+    CFLAGS="${CROSS_CFLAGS} ${SANITIZER_FLAGS}"
+    LDFLAGS="${SANITIZER_FLAGS}"
+  else
+    CFLAGS="${CROSS_CFLAGS}"
+    LDFLAGS=""
+  fi
+  make CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" && make install
 fi
 '''
 
@@ -127,21 +148,22 @@ dependencies = ["arch_target_dir",
                 "download-tiff", 
                 "configure-tiff", 
                 "build-tiff"]
-command = "cargo"
-args = [
-  "build",
-  "--profile",
-  "${PROFILE}",
-  "--features",
-  "${FEATURE}",
-  "--target-dir",
-  "${TARGET_DIR}",
-]
+command = "true"
+# command = "cargo"
+# args = [
+#   "build",
+#   "--profile",
+#   "${PROFILE}",
+#   "--features",
+#   "${FEATURE}",
+#   "--target-dir",
+#   "${TARGET_DIR}",
+# ]
 
 
 [tasks.arm]
 command = "cargo"
-args = ["make", "-p", "arm", "run"]
+args = ["make", "-p", "arm", "build"]
 
 [tasks.aarch64]
 command = "cargo"
@@ -149,19 +171,19 @@ args = ["make", "-p", "aarch64", "build"]
 
 [tasks.x86_64]
 command = "cargo"
-args = ["make", "-p", "x86_64", "run"]
+args = ["make", "-p", "x86_64", "build"]
 
 [tasks.i386]
 command = "cargo"
-args = ["make", "-p", "i386", "run"]
+args = ["make", "-p", "i386", "build"]
 
 [tasks.mips]
 command = "cargo"
-args = ["make", "-p", "mips", "run"]
+args = ["make", "-p", "mips", "build"]
 
 [tasks.ppc]
 command = "cargo"
-args = ["make", "-p", "ppc", "run"]
+args = ["make", "-p", "ppc", "build"]
 
 [tasks.all]
 dependencies = ["arm", "aarch64", "x86_64", "i386", "mips", "ppc"]

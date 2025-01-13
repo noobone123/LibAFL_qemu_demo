@@ -10,7 +10,7 @@ You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file
 ## Simple Manager for testing and Debugging
 Now I'm testing my harness using following command.
 ```
-./target/aarch64/release/h1k0_qemu_launcher \                                                                                                                                    ─╯
+./target/aarch64/release/h1k0_qemu_launcher \
     --input ./corpus \
     --output ./target/output \
     --log ./target/output/log.txt \
@@ -19,3 +19,7 @@ Now I'm testing my harness using following command.
     -L ./rootfs \
     ./target/aarch64/build-tiff/bin/tiffinfo -Dcjrsw ./infile
 ```
+
+## Testing the crashes
+1. Build with asan `ENABLE_ASAN=true cargo make x86_64`
+2. Run crashes for testing.
