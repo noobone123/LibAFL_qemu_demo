@@ -137,8 +137,33 @@ dependencies = ["clean-tiff"]
 clear = true
 script_runner = "@shell"
 script = '''
+rm -rf ./build
 rm -rf ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
 cargo clean
+'''
+
+[tasks.cargo-build]
+command = "cargo"
+args = [
+  "build",
+  "--profile",
+  "${PROFILE}",
+  "--features",
+  "${FEATURE}",
+  "--target-dir",
+  "${TARGET_DIR}",
+]
+
+[tasks.make-install]
+script_runner = "@shell"
+script = '''
+echo "Build completed"
+mkdir -p build
+rm -rf build/*
+cp -r ${TARGET_DIR}/build-tiff/* build/
+cp ${TARGET_DIR}/release/h1k0_qemu_launcher ./build
+cp ${TARGET_DIR}/release/libqasan.so ./build
+cp ${TARGET_DIR}/release/qemu-libafl-bridge/build/libqemu-${LIBPNG_ARCH}.so ./build
 '''
 
 [tasks.build]
@@ -147,19 +172,10 @@ cargo clean
 dependencies = ["arch_target_dir", 
                 "download-tiff", 
                 "configure-tiff", 
-                "build-tiff"]
+                "build-tiff",
+                "cargo-build",
+                "make-install"]
 command = "true"
-# command = "cargo"
-# args = [
-#   "build",
-#   "--profile",
-#   "${PROFILE}",
-#   "--features",
-#   "${FEATURE}",
-#   "--target-dir",
-#   "${TARGET_DIR}",
-# ]
-
 
 [tasks.arm]
 command = "cargo"

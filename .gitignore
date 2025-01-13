@@ -6,3 +6,4 @@
 Cargo.lock
 stats.txt
 output/
+build/

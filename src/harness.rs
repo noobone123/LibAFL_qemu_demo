@@ -1,5 +1,3 @@
-use std::process::abort;
-
 use libafl::{
     executors::ExitKind,
     inputs::{BytesInput, HasTargetBytes},
