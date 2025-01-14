@@ -10,7 +10,7 @@ You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file
 ## Simple Manager for testing and Debugging AsanModule
 Run without asan_module
 ```
-RUST_LOG=info ./build/h1k0_qemu_launcher \
+RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
     --input ./corpus \
     --output ./output \
     --log ./output/log.txt \
@@ -20,7 +20,7 @@ RUST_LOG=info ./build/h1k0_qemu_launcher \
 
 Run with asan_module
 ```
-RUST_LOG=info ./build/h1k0_qemu_launcher \
+RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
     --input ./corpus \
     --output ./output \
     --log ./output/log.txt \
