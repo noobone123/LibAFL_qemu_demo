@@ -28,6 +28,7 @@ RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
     ./build/bin/tiffinfo -Dcjrsw ./corpus/minisblack-1c-16b.tiff
 ```
 
+Only `./corpus/logluv-3c-16b.tiff` can run without unexpected input.
 
 ## (Deprecated) Testing the crashes
 1. Build with asan `ENABLE_ASAN=true cargo make x86_64`

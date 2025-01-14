@@ -125,16 +125,16 @@ impl<M: Monitor> Instance<'_, M> {
             .build()?;
 
         // // 
-        // let reg_reset_module = RegisterResetModule::new();
+        let reg_reset_module = RegisterResetModule::new();
         // // custom snapshot module and make `SnapshotModule` as its inner field is not supported and will cause a panic
-        // let snapshot_module = SnapshotModule::new();
+        let snapshot_module = SnapshotModule::new();
         // let input_injector_module = InputInjectorModule::new();
 
         // Be careful the order of the modules ... Snapshot Module should be called first.
         let modules = modules
             // .prepend(input_injector_module)
-            // .prepend(reg_reset_module)
-            // .prepend(snapshot_module)
+            .prepend(reg_reset_module)
+            .prepend(snapshot_module)
             .prepend(edge_coverage_module);
 
         /*
@@ -163,11 +163,11 @@ impl<M: Monitor> Instance<'_, M> {
         );
 
         // Save the current state of the registers
-        // emulator
-        //     .modules_mut()
-        //     .get_mut::<RegisterResetModule>()
-        //     .expect("Could not find back the register reset module")
-        //     .save(qemu);
+        emulator
+            .modules_mut()
+            .get_mut::<RegisterResetModule>()
+            .expect("Could not find back the register reset module")
+            .save(qemu);
         // // Set the input address for the input injector module
         // emulator
         //     .modules_mut()
