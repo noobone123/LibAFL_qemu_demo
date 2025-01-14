@@ -15,8 +15,8 @@ SANITIZER_FLAGS = { value = "-fsanitize=address", condition = { equals = ["ENABL
 #CUSTOM_QEMU_DIR= "~/qemu-libafl-bridge"
 
 [env.arm]
-CROSS_CC = "arm-linux-gnueabi-gcc"
-CROSS_CXX = "arm-linux-gnueabi-g++"
+CROSS_CC = "arm-none-eabi-gcc"
+CROSS_CXX = "arm-none-eabi-g++"
 CROSS_CFLAGS = ""
 TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/arm"
 LIBPNG_ARCH = "arm"

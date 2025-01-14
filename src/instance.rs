@@ -123,16 +123,18 @@ impl<M: Monitor> Instance<'_, M> {
         let edge_coverage_module = StdEdgeCoverageModule::builder()
             .map_observer(edges_observer.as_mut())
             .build()?;
-        let reg_reset_module = RegisterResetModule::new();
-        // custom snapshot module and make `SnapshotModule` as its inner field is not supported and will cause a panic
-        let snapshot_module = SnapshotModule::new();
-        let input_injector_module = InputInjectorModule::new();
+
+        // // 
+        // let reg_reset_module = RegisterResetModule::new();
+        // // custom snapshot module and make `SnapshotModule` as its inner field is not supported and will cause a panic
+        // let snapshot_module = SnapshotModule::new();
+        // let input_injector_module = InputInjectorModule::new();
 
         // Be careful the order of the modules ... Snapshot Module should be called first.
         let modules = modules
-            .prepend(input_injector_module)
-            .prepend(reg_reset_module)
-            .prepend(snapshot_module)
+            // .prepend(input_injector_module)
+            // .prepend(reg_reset_module)
+            // .prepend(snapshot_module)
             .prepend(edge_coverage_module);
 
         /*
@@ -159,18 +161,19 @@ impl<M: Monitor> Instance<'_, M> {
                 qemu, 
                 self.coverage_filter(qemu)?
         );
+
         // Save the current state of the registers
-        emulator
-            .modules_mut()
-            .get_mut::<RegisterResetModule>()
-            .expect("Could not find back the register reset module")
-            .save(qemu);
-        // Set the input address for the input injector module
-        emulator
-            .modules_mut()
-            .get_mut::<InputInjectorModule>()
-            .expect("Could not find back the input injector module")
-            .set_input_addr(harness.input_addr);
+        // emulator
+        //     .modules_mut()
+        //     .get_mut::<RegisterResetModule>()
+        //     .expect("Could not find back the register reset module")
+        //     .save(qemu);
+        // // Set the input address for the input injector module
+        // emulator
+        //     .modules_mut()
+        //     .get_mut::<InputInjectorModule>()
+        //     .expect("Could not find back the input injector module")
+        //     .set_input_addr(harness.input_addr);
 
         /*
          * Add Other Fuzzer Components
@@ -249,7 +252,8 @@ impl<M: Monitor> Instance<'_, M> {
         state.add_metadata(tokens);
 
         harness.post_fork();
-
+        
+        // For current testing, the harness only needs to run once, so we do not need to reset the program state.
         let mut harness = |_emulator: &mut Emulator<_, _, _, _, _>,
                            _state: &mut _,
                            input: &BytesInput| harness.run(_emulator.qemu());

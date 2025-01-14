@@ -1,6 +1,6 @@
 use std::process::abort;
 
-use libafl::inputs::{BytesInput, HasTargetBytes, UsesInput};
+use libafl::{inputs::{BytesInput, HasTargetBytes, UsesInput}, HasMetadata};
 use libafl_qemu::{
     modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple}, EmulatorModules, GuestAddr, Hook, Qemu, SYS_exit, SYS_exit_group, SYS_mmap, SYS_munmap, SYS_read, SyscallHookResult
 };
@@ -28,7 +28,7 @@ impl InputInjectorModule {
 
 impl<S> EmulatorModule<S> for InputInjectorModule
 where
-    S: Unpin + UsesInput<Input = BytesInput>,
+    S: Unpin + UsesInput<Input = BytesInput> + HasMetadata,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
@@ -109,7 +109,7 @@ fn syscall_hooks<ET, S>(
     _a7: GuestAddr,
 ) -> SyscallHookResult
 where
-    S: Unpin + UsesInput<Input = BytesInput>,
+    S: Unpin + UsesInput<Input = BytesInput> + HasMetadata,
     ET: EmulatorModuleTuple<S>,
 {
     let sys_num = sys_num as i64;
@@ -166,10 +166,14 @@ where
     }
     else if sys_num == SYS_exit || sys_num == SYS_exit_group {
         log::info!("Exit / Exit group syscall intercepted ...");
+
+        // let state = _state.expect("The gen_unique_block_ids hook works only for in-process fuzzing");
+        // state.add_metadata(meta);
         // I tried to abort the process here, however, unlike what I expected, the fuzzer stopped.
         // SyscallHookResult::new(Some(1))
         // Return SyscallHookResult with None to let the syscall execute normally and program and fuzzer will return
-        SyscallHookResult::new(None)
+        // SyscallHookResult::new(None)
+        abort();
     }
     else {
         SyscallHookResult::new(None)

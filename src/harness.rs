@@ -5,7 +5,7 @@ use libafl::{
 };
 use libafl_bolts::AsSlice;
 use libafl_qemu::{
-    elf::EasyElf, ArchExtras, BackdoorHook, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, QemuExitReason, Regs
+    elf::EasyElf, ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, QemuExitReason, Regs
 };
 
 pub struct Harness {
@@ -43,16 +43,23 @@ impl Harness {
         let load_addr = qemu.load_addr();
         log::info!("load_addr = {load_addr:#x}");
 
-        let main_addr = elf
-            .resolve_symbol("main", qemu.load_addr())
-            .ok_or_else(|| Error::empty_optional("Symbol main not found"))?;
+        // AArch64 ...
+        #[cfg(feature = "aarch64")]
+        let (tiff_cleanup_addr, start_pc, end_pc) = {
+            let tiff_cleanup_addr = elf
+                .resolve_symbol("TIFFCleanup", qemu.load_addr())
+                .ok_or_else(|| Error::empty_optional("Symbol TIFFCleanup not found"))?;
+            let start_pc = main_addr + 0x178;
+            let end_pc = main_addr + 0x144;
+            (tiff_cleanup_addr, start_pc, end_pc)
+        };
 
-        let tiff_cleanup_addr = elf
-            .resolve_symbol("TIFFCleanup", qemu.load_addr())
-            .ok_or_else(|| Error::empty_optional("Symbol TIFFCleanup not found"))?;
-
-        let start_pc = main_addr + 0x178;
-        let end_pc = main_addr + 0x144;
+        #[cfg(feature = "x86_64")]
+        let (tiff_cleanup_addr, start_pc, end_pc) = {
+            let start_pc = load_addr + 0x261A;
+            let end_pc = load_addr + 0x273C;
+            (0, start_pc, end_pc)
+        };
 
         log::info!("start_pc @ {start_pc:#x}");
         log::info!("end_pc @ {end_pc:#x}");
@@ -82,6 +89,13 @@ impl Harness {
             .map_err(|e| Error::unknown(format!("Failed to map input buffer: {e:}")))?;
 
         log::info!("Harness initialized");
+
+        // All libraries are loaded only after the qemu.run() is called, or only the ld-linux.so is loaded
+        let mappings = qemu.mappings();
+        for mapping in mappings {
+            log::info!("{:?}", mapping);
+        }
+
         Ok(Harness { qemu, input_addr, abort_addr: tiff_cleanup_addr })
     }
 
@@ -96,7 +110,10 @@ impl Harness {
         log::info!("Num Regs: {}", _qemu.num_regs());
 
         // Maybe add TiffFree in abort_addrs?
-        _qemu.set_breakpoint(self.abort_addr);
+        // if self.abort_addr != 0 {
+        //     _qemu.set_breakpoint(self.abort_addr);
+        // }
+
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
@@ -115,11 +132,15 @@ impl Harness {
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
-        _qemu.remove_breakpoint(self.abort_addr);
+
+        // if self.abort_addr != 0 {
+        //     _qemu.remove_breakpoint(self.abort_addr);
+        // }
 
         ExitKind::Ok
     }
 
+    // No need to call reset here because the target will crash at first run.
     fn reset(&self, input: &BytesInput) -> Result<(), Error> {
         let target = input.target_bytes();
         let mut buf = target.as_slice();

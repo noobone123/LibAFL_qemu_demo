@@ -31,28 +31,6 @@ use crate::{client::Client, options::FuzzerOptions};
 use env_logger::{Builder, Env};
 use std::sync::Once;
 
-static LOGGER_INIT: Once = Once::new();
-
-fn init_logger() {
-    LOGGER_INIT.call_once(|| {
-        Builder::from_env(Env::default().default_filter_or("info"))
-            .format(|buf, record| {
-                writeln!(
-                    buf,
-                    "[{}] {} - {}",
-                    record.level(),
-                    record.module_path().unwrap_or("unknown"),
-                    record.args()
-                )
-            })
-            .target(env_logger::Target::Stdout)
-            .init();
-    });
-
-    eprintln!("Current log level: {:?}", log::max_level());
-    eprintln!("Debug enabled: {}", log::log_enabled!(log::Level::Debug));
-}
-
 pub struct Fuzzer {
     options: FuzzerOptions,
 }
@@ -67,7 +45,8 @@ impl Fuzzer {
     pub fn fuzz(&self) -> Result<(), Error> {
         // This logger is different from following `log`, this logger is used for logging info in the fuzzer itself
         // while `log` is used for logging outputs from MultiMonitor
-        init_logger();
+        // init_logger();
+        env_logger::init();
 
         log::info!("Starting fuzzer with options: {:?}", self.options);
 
@@ -119,12 +98,12 @@ impl Fuzzer {
         let mut shmem_provider = StdShMemProvider::new()?;
 
         /* If we are running in verbose, don't provide a replacement stdout, otherwise, use /dev/null */
-        #[cfg(not(feature = "simplemgr"))]
-        let stdout = if self.options.verbose {
-            None
-        } else {
-            Some("/dev/null")
-        };
+        // #[cfg(not(feature = "simplemgr"))]
+        // let stdout = if self.options.verbose {
+        //     None
+        // } else {
+        //     Some("/dev/null")
+        // };
 
         let client = Client::new(&self.options);
 
@@ -176,8 +155,8 @@ impl Fuzzer {
             .monitor(monitor)
             .run_client(|s, m, c| client.run(s, MonitorTypedEventManager::<_, M>::new(m), c))
             .cores(&self.options.cores)
-            .stdout_file(stdout)
-            .stderr_file(stdout)
+            // .stdout_file(stdout)
+            // .stderr_file(stdout)
             .build()
             .launch()
         {
