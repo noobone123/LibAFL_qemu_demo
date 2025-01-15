@@ -49,8 +49,8 @@ impl Harness {
             let tiff_cleanup_addr = elf
                 .resolve_symbol("TIFFCleanup", qemu.load_addr())
                 .ok_or_else(|| Error::empty_optional("Symbol TIFFCleanup not found"))?;
-            let start_pc = main_addr + 0x178;
-            let end_pc = main_addr + 0x144;
+            let start_pc = load_addr + 0x3634;
+            let end_pc = load_addr + 0x3738;
             (tiff_cleanup_addr, start_pc, end_pc)
         };
 
@@ -66,6 +66,8 @@ impl Harness {
 
         // qemu.entry_break(start_pc);
         qemu.set_breakpoint(start_pc);
+        qemu.set_breakpoint(end_pc);
+
         unsafe {
             match qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
@@ -80,9 +82,6 @@ impl Harness {
             }
         }
         qemu.remove_breakpoint(start_pc);
-
-        // qemu.run() will run the emulator until the next breakpoint / sync exit, or until finish.
-        qemu.set_breakpoint(end_pc);
 
         let input_addr = qemu
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
@@ -109,34 +108,20 @@ impl Harness {
         log::info!("Harness Start running");
         log::info!("Num Regs: {}", _qemu.num_regs());
 
-        // Maybe add TiffFree in abort_addrs?
-        // if self.abort_addr != 0 {
-        //     _qemu.set_breakpoint(self.abort_addr);
-        // }
-
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
-                Ok(QemuExitReason::Breakpoint(addr)) => {
-                    log::info!("QEMU hit start breakpoint");
+                Ok(QemuExitReason::Breakpoint(_)) => {
+                    log::info!("QEMU hit breakpoint");
                     let pc: GuestReg = _qemu
                         .read_reg(Regs::Pc)
                         .expect("Failed to read PC");
                     log::info!("PC = {pc:#x}");
-                    
-                    if addr == self.abort_addr {
-                        log::info!("QEMU hit abort breakpoint");
-                        return ExitKind::Ok;
-                    }
                 }
                 _ => panic!("Unexpected QEMU exit."),
             }
         }
-
-        // if self.abort_addr != 0 {
-        //     _qemu.remove_breakpoint(self.abort_addr);
-        // }
-
+        
         ExitKind::Ok
     }
 

@@ -27,9 +27,7 @@ use {
 };
 
 use crate::{client::Client, options::FuzzerOptions};
-
-use env_logger::{Builder, Env};
-use std::sync::Once;
+use env_logger;
 
 pub struct Fuzzer {
     options: FuzzerOptions,

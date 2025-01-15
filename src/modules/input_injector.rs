@@ -1,9 +1,11 @@
 use std::process::abort;
 
-use libafl::{inputs::{BytesInput, HasTargetBytes, UsesInput}, HasMetadata};
+use libafl::{inputs::HasTargetBytes, HasMetadata};
 use libafl_qemu::{
     modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple}, EmulatorModules, GuestAddr, Hook, Qemu, SYS_exit, SYS_exit_group, SYS_mmap, SYS_munmap, SYS_read, SyscallHookResult
 };
+
+use crate::modules::ExecMeta;
 
 #[derive(Default, Debug)]
 pub struct InputInjectorModule {
@@ -26,40 +28,46 @@ impl InputInjectorModule {
     }
 }
 
-impl<S> EmulatorModule<S> for InputInjectorModule
+impl<I, S> EmulatorModule<I, S> for InputInjectorModule
 where
-    S: Unpin + UsesInput<Input = BytesInput> + HasMetadata,
+    S: Unpin + HasMetadata,
+    I: Unpin + HasTargetBytes, 
 {
     type ModuleAddressFilter = NopAddressFilter;
 
     fn first_exec<ET>(
         &mut self,
         _qemu: Qemu,
-        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _emulator_modules: &mut EmulatorModules<ET, I, S>,
         _state: &mut S,
     ) where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         log::info!("InputInjectorModule::first_exec running ...");
 
         if let Some(hook_id) =
-            _emulator_modules.pre_syscalls(Hook::Function(syscall_hooks::<ET, S>))
+            _emulator_modules.pre_syscalls(Hook::Function(syscall_hooks::<ET, I, S>))
         {
             log::info!("Hook {:?} installed", hook_id);
         } else {
             log::error!("Failed to install hook");
         }
+
+        let exec_meta = ExecMeta::new();
+        _state.add_metadata(exec_meta);
     }
 
     fn pre_exec<ET>(
         &mut self,
         _qemu: Qemu,
-        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _emulator_modules: &mut EmulatorModules<ET, I, S>,
         _state: &mut S,
-        _input: &S::Input,
+        _input: &I,
     ) where
-        ET: EmulatorModuleTuple<S>,
-    {
+        ET: EmulatorModuleTuple<I, S>,
+    {   
+        log::info!("InputInjectorModule::pre_exec running ...");
+
         let mut tb = _input.target_bytes();
         if tb.len() > self.max_size {
             if let None = tb.truncate(self.max_size) {
@@ -68,7 +76,6 @@ where
             }
         }
 
-        log::info!("Injecting input of size {} at address {:#x}", tb.len(), self.input_addr);
         self.input.clear();
         self.input.extend_from_slice(&tb);
 
@@ -94,9 +101,9 @@ where
 /// This is user-defined syscall hook.
 /// If create `SyscallHookResult` with `None`, the syscall will execute normally
 /// If create `SyscallHookResult` with `Some(retval)`, the syscall will directly return the retval and not execute
-fn syscall_hooks<ET, S>(
+fn syscall_hooks<ET, I, S>(
     _qemu: Qemu,
-    emulator_modules: &mut EmulatorModules<ET, S>,
+    emulator_modules: &mut EmulatorModules<ET, I, S>,
     _state: Option<&mut S>,
     sys_num: i32,
     a0: GuestAddr,
@@ -109,8 +116,9 @@ fn syscall_hooks<ET, S>(
     _a7: GuestAddr,
 ) -> SyscallHookResult
 where
-    S: Unpin + UsesInput<Input = BytesInput> + HasMetadata,
-    ET: EmulatorModuleTuple<S>,
+    S: Unpin + HasMetadata,
+    I: Unpin + HasTargetBytes,
+    ET: EmulatorModuleTuple<I, S>,
 {
     let sys_num = sys_num as i64;
     // Hook syscall read
@@ -166,13 +174,15 @@ where
     }
     else if sys_num == SYS_exit || sys_num == SYS_exit_group {
         log::info!("Exit / Exit group syscall intercepted ...");
-
-        // let state = _state.expect("The gen_unique_block_ids hook works only for in-process fuzzing");
-        // state.add_metadata(meta);
-        // I tried to abort the process here, however, unlike what I expected, the fuzzer stopped.
-        // SyscallHookResult::new(Some(1))
-        // Return SyscallHookResult with None to let the syscall execute normally and program and fuzzer will return
-        // SyscallHookResult::new(None)
+        
+        // Simply abort() will cause the fuzzer treat it as a crash, so we need to set a flag to ignore it
+        let state = _state.expect("No state found");
+        let exec_meta = state
+            .metadata_map_mut()
+            .get_mut::<ExecMeta>()
+            .expect("Can't get exec_meta");
+        exec_meta.ignore = true;
+        
         abort();
     }
     else {

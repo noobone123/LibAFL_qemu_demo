@@ -14,7 +14,7 @@ use libafl::{
     }, stages::{
         calibrate::CalibrationStage, power::StdPowerMutationalStage, AflStatsStage, IfStage,
         ShadowTracingStage, StagesTuple, StdMutationalStage,
-    }, state::{HasCorpus, StdState, UsesState}, Error, HasMetadata, NopFuzzer
+    }, state::{HasCorpus, StdState}, Error, HasMetadata, NopFuzzer
 };
 #[cfg(not(feature = "simplemgr"))]
 use libafl_bolts::shmem::StdShMemProvider;
@@ -38,9 +38,7 @@ use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND}
 use typed_builder::TypedBuilder;
 
 use crate::{
-    harness::Harness,
-    modules::{InputInjectorModule, RegisterResetModule},
-    options::FuzzerOptions,
+    feedbacks::ignore_exit::{self, IgnoreExitFeedback}, harness::Harness, modules::{InputInjectorModule, RegisterResetModule}, options::FuzzerOptions
 };
 
 pub type ClientState =
@@ -105,7 +103,7 @@ impl<M: Monitor> Instance<'_, M> {
         state: Option<ClientState>,
     ) -> Result<(), Error>
     where
-        ET: EmulatorModuleTuple<ClientState> + Debug,
+        ET: EmulatorModuleTuple<BytesInput, ClientState> + Debug,
     {
         // Create an observation channel using the coverage map
         let mut edges_observer = unsafe {
@@ -124,18 +122,17 @@ impl<M: Monitor> Instance<'_, M> {
             .map_observer(edges_observer.as_mut())
             .build()?;
 
-        // // 
         let reg_reset_module = RegisterResetModule::new();
         // // custom snapshot module and make `SnapshotModule` as its inner field is not supported and will cause a panic
         let snapshot_module = SnapshotModule::new();
-        // let input_injector_module = InputInjectorModule::new();
+        let input_injector_module = InputInjectorModule::new();
 
-        // Be careful the order of the modules ... Snapshot Module should be called first.
+        // Be careful the order of the modules ...
         let modules = modules
-            // .prepend(input_injector_module)
+            .prepend(edge_coverage_module)
+            .prepend(input_injector_module)
             .prepend(reg_reset_module)
-            .prepend(snapshot_module)
-            .prepend(edge_coverage_module);
+            .prepend(snapshot_module);
 
         /*
            Initialize the Emulator, Qemu (initialized in emulator) and Harness
@@ -154,11 +151,11 @@ impl<M: Monitor> Instance<'_, M> {
         */
         // update address filter after qemu has been initialized
         <EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0> 
-            as EmulatorModule<ClientState>>::update_address_filter(
+            as EmulatorModule<BytesInput, ClientState>>::update_address_filter(
                 emulator.modules_mut()
                     .get_mut::<EdgeCoverageModule<StdAddressFilter, NopPageFilter, EdgeCoverageFullVariant, false, 0>>()
                     .expect("Could not find back the edge module"), 
-                qemu, 
+                qemu,
                 self.coverage_filter(qemu)?
         );
 
@@ -168,12 +165,13 @@ impl<M: Monitor> Instance<'_, M> {
             .get_mut::<RegisterResetModule>()
             .expect("Could not find back the register reset module")
             .save(qemu);
-        // // Set the input address for the input injector module
-        // emulator
-        //     .modules_mut()
-        //     .get_mut::<InputInjectorModule>()
-        //     .expect("Could not find back the input injector module")
-        //     .set_input_addr(harness.input_addr);
+
+        // Set the input address for the input injector module
+        emulator
+            .modules_mut()
+            .get_mut::<InputInjectorModule>()
+            .expect("Could not find back the input injector module")
+            .set_input_addr(harness.input_addr);
 
         /*
          * Add Other Fuzzer Components
@@ -182,6 +180,9 @@ impl<M: Monitor> Instance<'_, M> {
         let time_observer = TimeObserver::new("time");
 
         let map_feedback = MaxMapFeedback::new(&edges_observer);
+
+        // If this input should not be ignored, `is_interesting` will return true
+        let ignore_exit_feedback = IgnoreExitFeedback;
 
         let calibration = CalibrationStage::new(&map_feedback);
 
@@ -197,14 +198,17 @@ impl<M: Monitor> Instance<'_, M> {
         // This one is composed by two Feedbacks in OR
         let mut feedback = feedback_or!(
             // New maximization map feedback linked to the edges observer and the feedback state
-            map_feedback,
+            feedback_and_fast!(
+                map_feedback,
+                ignore_exit_feedback
+            ),
             // Time feedback, this one does not need a feedback state
             TimeFeedback::new(&time_observer)
         );
 
         // A feedback to choose if an input is a solution or not
         let mut objective = feedback_and_fast!(
-            CrashFeedback::new(), 
+            CrashFeedback::new(),
             MaxMapFeedback::new(&edges_observer));
 
         // // If not restarting, create a State from scratch
@@ -254,7 +258,7 @@ impl<M: Monitor> Instance<'_, M> {
         harness.post_fork();
         
         // For current testing, the harness only needs to run once, so we do not need to reset the program state.
-        let mut harness = |_emulator: &mut Emulator<_, _, _, _, _>,
+        let mut harness = |_emulator: &mut Emulator<_, _, _, _, _, _, _>,
                            _state: &mut _,
                            input: &BytesInput| harness.run(_emulator.qemu());
 

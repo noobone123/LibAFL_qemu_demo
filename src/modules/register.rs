@@ -12,30 +12,16 @@ pub struct RegisterResetModule {
 
 impl RegisterResetModule {
     pub fn new() -> Self {
-        #[cfg(feature = "x86_64")]
-        let reg_num = 18;
-        #[cfg(feature = "aarch64")]
-        let reg_num = 34;
-        #[cfg(feature = "mips")]
-        let reg_num = 38;
-        #[cfg(feature = "arm")]
-        let reg_num = 26;
-        #[cfg(feature = "i386")]
-        let reg_num = 10;
-
-        Self {
-            reg_num,
-            regs: vec![0; reg_num],
-        }
+        Self::default()
     }
 
     pub fn save(&mut self, qemu: Qemu) {
         log::debug!("Saving register state at start point ...");
 
+        self.reg_num = qemu.num_regs() as usize;
         let regs = (0..self.reg_num)
             .map(|i| qemu.read_reg(i as i32).unwrap_or(0))
             .collect::<Vec<u64>>();
-
         self.regs = regs;
     }
 
@@ -48,25 +34,26 @@ impl RegisterResetModule {
     }
 }
 
-impl<S> EmulatorModule<S> for RegisterResetModule
+impl<I, S> EmulatorModule<I, S> for RegisterResetModule
 where
-    S: UsesInput,
+    S: Unpin,
+    I: Unpin,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
     fn pre_qemu_init<ET>(
         &mut self,
-        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _emulator_modules: &mut EmulatorModules<ET, I, S>,
         _qemu_params: &mut QemuParams,
     ) where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         log::info!("RegisterResetModule::pre_qemu_init running ...");
     }
 
-    fn post_qemu_init<ET>(&mut self, _qemu: Qemu, _emulator_modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&mut self, _qemu: Qemu, _emulator_modules: &mut EmulatorModules<ET, I, S>)
     where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         log::info!("RegisterResetModule::post_qemu_init running ...");
     }
@@ -74,11 +61,11 @@ where
     fn pre_exec<ET>(
         &mut self,
         _qemu: Qemu,
-        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _emulator_modules: &mut EmulatorModules<ET, I, S>,
         _state: &mut S,
-        _input: &S::Input,
+        _input: &I,
     ) where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         log::info!("RegisterResetModule::pre_exec running ...");
         self.restore(_qemu);
