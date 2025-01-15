@@ -1,4 +1,3 @@
-use libafl::inputs::UsesInput;
 use libafl_qemu::{
     modules::{utils::filters::NopAddressFilter, EmulatorModule, EmulatorModuleTuple},
     EmulatorModules, Qemu, QemuParams, Regs,
