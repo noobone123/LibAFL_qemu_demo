@@ -17,6 +17,19 @@ RUST_LOG=info ./build/h1k0_qemu_launcher \
     -L ./rootfs ./build/bin/tiffinfo -Dcjrsw  ./corpus/minisblack-1c-16b.tiff
 ```
 
+## Verify Crashes
+1. Modify `Cargo.toml`, add `"simplemgr"` in features
+2. run following command
+
+    ```
+    RUST_LOG=info ./build/h1k0_qemu_launcher \
+    --input ./corpus \
+    --output ./output \
+    --log ./output/log.txt \
+    --cores 0 --asan-cores 0 -r <input> -- \
+    -L ./rootfs ./build/bin/tiffinfo -Dcjrsw <input>
+    ```
+
 ## Simple Manager for testing and Debugging AsanModule
 Run without asan_module
 ```
