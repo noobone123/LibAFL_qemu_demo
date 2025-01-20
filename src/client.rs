@@ -12,8 +12,7 @@ use libafl_bolts::{rands::StdRand, tuples::tuple_list};
 #[cfg(feature = "injections")]
 use libafl_qemu::modules::injections::InjectionModule;
 use libafl_qemu::modules::{
-    asan::AsanModule, asan_guest::AsanGuestModule, cmplog::CmpLogModule, DrCovModule,
-    InjectionModule,
+    asan::{AsanModule, QemuAsanOptions}, asan_guest::AsanGuestModule, cmplog::CmpLogModule, utils::filters::StdAddressFilter, DrCovModule, InjectionModule
 };
 
 use crate::{
@@ -163,9 +162,18 @@ impl Client<'_> {
                     state,
                 )
             } else {
+                // Using AsanModule with report enabled
+                let asan_module = unsafe {
+                    AsanModule::with_asan_report(
+                        StdAddressFilter::default(), 
+                        &QemuAsanOptions::Snapshot, 
+                        &env
+                    )
+                };
+
                 instance_builder
                     .build()
-                    .run(args, tuple_list!(AsanModule::default(&env),), state)
+                    .run(args, tuple_list!(asan_module), state)
             }
         } else if is_asan_guest {
             instance_builder
