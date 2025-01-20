@@ -4,9 +4,19 @@ You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file
 # Build
 1. run `cargo make clean` to clean up all build
 2. <Optional> Modify the libafl path in `Cargo.toml`, now my libafl version is `commit d8460d14a2872d1281ac0eb55797d0dc63a2d144` 
-3. run `cargo make x86_64` to build the fuzzer and target binaries.
+3. run `cargo make aarch64` to build the fuzzer and target binaries.
 
 # Run
+## Run the fuzzer
+```
+RUST_LOG=info ./build/h1k0_qemu_launcher \
+    --input ./corpus \
+    --output ./output \
+    --log ./output/log.txt \
+    --cores 0-7 --asan-cores 0-2 --cmplog-cores 3-5 --tokens ./build/tiff.dict  -- \
+    -L ./rootfs ./build/bin/tiffinfo -Dcjrsw  ./corpus/minisblack-1c-16b.tiff
+```
+
 ## Simple Manager for testing and Debugging AsanModule
 Run without asan_module
 ```
