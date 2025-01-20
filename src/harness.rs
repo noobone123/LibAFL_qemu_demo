@@ -56,8 +56,8 @@ impl Harness {
 
         #[cfg(feature = "x86_64")]
         let (tiff_cleanup_addr, start_pc, end_pc) = {
-            let start_pc = load_addr + 0x261A;
-            let end_pc = load_addr + 0x273C;
+            let start_pc = load_addr + 0x1384;
+            let end_pc = load_addr + 0x14C0;
             (0, start_pc, end_pc)
         };
 

@@ -26,7 +26,7 @@ use libafl_bolts::{
 use libafl_qemu::{
     elf::EasyElf,
     modules::{
-        calls::{CallTraceCollector, FullBacktraceCollector}, cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, CallTracerModule, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
+        calls::{CallTraceCollector, FullBacktraceCollector}, cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, AsanModule, CallTracerModule, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
     },
     Emulator, GuestAddr, Qemu, QemuExecutor,
 };
@@ -91,6 +91,15 @@ impl<M: Monitor> Instance<'_, M> {
         }
     }
 
+    fn asan_filter(&self, qemu: Qemu) -> Result<StdAddressFilter, Error> {
+        let mut elf_buffer = Vec::new();
+        let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
+        let range = elf
+            .get_section(".text", qemu.load_addr())
+            .ok_or_else(|| Error::key_not_found("Failed to find .text section"))?;
+        Ok(StdAddressFilter::allow_list(vec![range]))
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn run<ET>(
         &mut self,
@@ -153,6 +162,16 @@ impl<M: Monitor> Instance<'_, M> {
                     .expect("Could not find back the edge module"), 
                 qemu,
                 self.coverage_filter(qemu)?
+        );
+        
+        // update address filter after qemu has been initialized
+        <AsanModule as EmulatorModule<BytesInput, ClientState>>::update_address_filter(
+            emulator
+                .modules_mut()
+                .get_mut::<AsanModule>()
+                .expect("Could not find back the asan module"),
+            qemu,
+            self.asan_filter(qemu)?
         );
 
         // Save the current state of the registers
