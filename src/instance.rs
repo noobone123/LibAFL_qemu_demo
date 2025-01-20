@@ -14,7 +14,7 @@ use libafl::{
     }, stages::{
         calibrate::CalibrationStage, power::StdPowerMutationalStage, AflStatsStage, IfStage,
         ShadowTracingStage, StagesTuple, StdMutationalStage,
-    }, state::{HasCorpus, StdState}, Error, HasMetadata, NopFuzzer
+    }, state::{HasCorpus, StdState}, Error, HasMetadata
 };
 #[cfg(not(feature = "simplemgr"))]
 use libafl_bolts::shmem::StdShMemProvider;
@@ -38,11 +38,11 @@ use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND}
 use typed_builder::TypedBuilder;
 
 use crate::{
-    feedbacks::ignore_exit::{self, IgnoreExitFeedback}, harness::Harness, modules::{InputInjectorModule, RegisterResetModule}, options::FuzzerOptions
+    feedbacks::ignore_exit::IgnoreExitFeedback, harness::Harness, modules::{InputInjectorModule, RegisterResetModule}, options::FuzzerOptions
 };
 
 pub type ClientState =
-    StdState<BytesInput, InMemoryOnDiskCorpus<BytesInput>, StdRand, OnDiskCorpus<BytesInput>>;
+    StdState<InMemoryOnDiskCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
 
 #[cfg(feature = "simplemgr")]
 pub type ClientMgr<M> = SimpleEventManager<BytesInput, M, ClientState>;
@@ -283,9 +283,9 @@ impl<M: Monitor> Instance<'_, M> {
 
             executor
                 .run_target(
-                    &mut NopFuzzer::new(),
+                    &mut fuzzer,
                     &mut state,
-                    &mut NopEventManager::new(),
+                    &mut self.mgr,
                     &input,
                 )
                 .expect("Error running target");
@@ -363,8 +363,8 @@ impl<M: Monitor> Instance<'_, M> {
         stages: &mut ST,
     ) -> Result<(), Error>
     where
-        Z: Fuzzer<E, ClientMgr<M>, ClientState, ST>
-            + Evaluator<E, ClientMgr<M>, BytesInput, ClientState>,
+        Z: Fuzzer<E, ClientMgr<M>, BytesInput, ClientState, ST>
+        + Evaluator<E, ClientMgr<M>, BytesInput, ClientState>,
         ST: StagesTuple<E, ClientMgr<M>, ClientState, Z>,
     {
         let corpus_dirs = [self.options.input_dir()];
