@@ -43,8 +43,10 @@ pub type ClientState =
 #[cfg(feature = "simplemgr")]
 pub type ClientMgr<M> = SimpleEventManager<BytesInput, M, ClientState>;
 #[cfg(not(feature = "simplemgr"))]
-pub type ClientMgr<M> =
-    MonitorTypedEventManager<LlmpRestartingEventManager<(), ClientState, StdShMemProvider>, M>;
+pub type ClientMgr<M> = MonitorTypedEventManager<
+    LlmpRestartingEventManager<(), BytesInput, ClientState, StdShMemProvider>,
+    M,
+>;
 
 #[derive(TypedBuilder)]
 pub struct Instance<'a, M: Monitor> {
@@ -163,7 +165,7 @@ impl<M: Monitor> Instance<'_, M> {
                 qemu,
                 self.coverage_filter(qemu)?
         );
-        
+
         // update address filter after qemu has been initialized
         <AsanModule as EmulatorModule<BytesInput, ClientState>>::update_address_filter(
             emulator
@@ -265,6 +267,7 @@ impl<M: Monitor> Instance<'_, M> {
         }
 
         if let Some(tokenfile) = &self.options.tokens {
+            log::info!("Loading tokens from file: {:?}", tokenfile);
             tokens.add_from_file(tokenfile)?;
         }
 

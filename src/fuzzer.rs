@@ -96,12 +96,12 @@ impl Fuzzer {
         let mut shmem_provider = StdShMemProvider::new()?;
 
         /* If we are running in verbose, don't provide a replacement stdout, otherwise, use /dev/null */
-        // #[cfg(not(feature = "simplemgr"))]
-        // let stdout = if self.options.verbose {
-        //     None
-        // } else {
-        //     Some("/dev/null")
-        // };
+        #[cfg(not(feature = "simplemgr"))]
+        let stdout = if self.options.verbose {
+            None
+        } else {
+            Some("/dev/null")
+        };
 
         let client = Client::new(&self.options);
 
@@ -153,8 +153,8 @@ impl Fuzzer {
             .monitor(monitor)
             .run_client(|s, m, c| client.run(s, MonitorTypedEventManager::<_, M>::new(m), c))
             .cores(&self.options.cores)
-            // .stdout_file(stdout)
-            // .stderr_file(stdout)
+            .stdout_file(stdout)
+            .stderr_file(stdout)
             .build()
             .launch()
         {

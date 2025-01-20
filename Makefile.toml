@@ -164,6 +164,7 @@ cp -r ${TARGET_DIR}/build-tiff/* build/
 cp ${TARGET_DIR}/release/h1k0_qemu_launcher ./build
 cp ${TARGET_DIR}/release/libqasan.so ./build
 cp ${TARGET_DIR}/release/qemu-libafl-bridge/build/libqemu-${LIBPNG_ARCH}.so ./build
+wget https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/tiff.dict -O build/tiff.dict
 '''
 
 [tasks.build]
