@@ -51,6 +51,6 @@ RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
 - `RUST_BACKTRACE=full`: Enable backtrace, useful for debugging clients' crashes
 - `RUST_LOG=info`: Enable info level log
 
-## (Deprecated) Testing the crashes
+## Testing the crashes with Source Code (Optional)
 1. Build with asan `ENABLE_ASAN=true cargo make x86_64`
 2. Run crashes for testing.
