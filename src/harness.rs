@@ -35,13 +35,13 @@ impl Harness {
 
     /// Initialize the emulator, run to the entrypoint (or jump there) and return the [`Harness`] struct
     pub fn init(qemu: Qemu) -> Result<Harness, Error> {
-        log::info!("Initializing harness ...");
+        println!("Initializing harness ...");
 
         let mut elf_buffer = Vec::new();
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
 
         let load_addr = qemu.load_addr();
-        log::info!("load_addr = {load_addr:#x}");
+        println!("load_addr = {load_addr:#x}");
 
         // AArch64 ...
         #[cfg(feature = "aarch64")]
@@ -61,8 +61,8 @@ impl Harness {
             (0, start_pc, end_pc)
         };
 
-        log::info!("start_pc @ {start_pc:#x}");
-        log::info!("end_pc @ {end_pc:#x}");
+        println!("start_pc @ {start_pc:#x}");
+        println!("end_pc @ {end_pc:#x}");
 
         // qemu.entry_break(start_pc);
         qemu.set_breakpoint(start_pc);
@@ -72,11 +72,11 @@ impl Harness {
             match qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
                 Ok(QemuExitReason::Breakpoint(_)) => {
-                    log::info!("QEMU hit start breakpoint");
+                    println!("QEMU hit start breakpoint");
                     let pc: GuestReg = qemu
                         .read_reg(Regs::Pc)
                         .map_err(|e| Error::unknown(format!("Failed to read PC: {e:?}")))?;
-                    log::info!("PC = {pc:#x}");
+                    println!("PC = {pc:#x}");
                 }
                 _ => panic!("Unexpected QEMU exit."),
             }
@@ -87,13 +87,13 @@ impl Harness {
             .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
             .map_err(|e| Error::unknown(format!("Failed to map input buffer: {e:}")))?;
 
-        log::info!("Harness initialized");
+        println!("Harness initialized");
 
         // All libraries are loaded only after the qemu.run() is called, or only the ld-linux.so is loaded
-        let mappings = qemu.mappings();
-        for mapping in mappings {
-            log::info!("{:?}", mapping);
-        }
+        // let mappings = qemu.mappings();
+        // for mapping in mappings {
+        //     log::info!("{:?}", mapping);
+        // }
 
         Ok(Harness { qemu, input_addr, abort_addr: tiff_cleanup_addr })
     }
@@ -105,18 +105,17 @@ impl Harness {
 
     // We didn't do much here, because input has been injected by Custom EmulatorModules
     pub fn run(&self, _qemu: Qemu) -> ExitKind {
-        log::info!("Harness Start running");
-        log::info!("Num Regs: {}", _qemu.num_regs());
+        println!("Harness Start running");
 
         unsafe {
             match _qemu.run() {
                 // It seems that the control will back after the inst at breakpoint addr is executed
                 Ok(QemuExitReason::Breakpoint(_)) => {
-                    log::info!("QEMU hit breakpoint");
+                    println!("QEMU hit breakpoint");
                     let pc: GuestReg = _qemu
                         .read_reg(Regs::Pc)
                         .expect("Failed to read PC");
-                    log::info!("PC = {pc:#x}");
+                    println!("PC = {pc:#x}");
                 }
                 _ => panic!("Unexpected QEMU exit."),
             }

@@ -43,12 +43,12 @@ where
     ) where
         ET: EmulatorModuleTuple<I, S>,
     {
-        log::info!("InputInjectorModule::first_exec running ...");
+        log::debug!("InputInjectorModule::first_exec running ...");
 
         if let Some(hook_id) =
             _emulator_modules.pre_syscalls(Hook::Function(syscall_hooks::<ET, I, S>))
         {
-            log::info!("Hook {:?} installed", hook_id);
+            log::debug!("Hook {:?} installed", hook_id);
         } else {
             log::error!("Failed to install hook");
         }
@@ -66,7 +66,7 @@ where
     ) where
         ET: EmulatorModuleTuple<I, S>,
     {   
-        log::info!("InputInjectorModule::pre_exec running ...");
+        log::debug!("InputInjectorModule::pre_exec running ...");
 
         let mut tb = _input.target_bytes();
         if tb.len() > self.max_size {
@@ -123,7 +123,7 @@ where
     let sys_num = sys_num as i64;
     // Hook syscall read
     if sys_num == SYS_read {
-        log::info!("Read syscall intercepted ...");
+        log::debug!("Read syscall intercepted ...");
         let input_injector_module = emulator_modules
             .get_mut::<InputInjectorModule>()
             .expect("Failed to get InputInjectorModule");
@@ -149,11 +149,11 @@ where
     }
     else if sys_num == SYS_mmap {
         if _a2 == 1 && _a3 == 1 {
-            log::info!("Mmap syscall intercepted ...");
+            log::debug!("Mmap syscall intercepted ...");
             let input_injector_module = emulator_modules
                 .get_mut::<InputInjectorModule>()
                 .expect("Failed to get InputInjectorModule");
-            log::info!("Mmap return address: {:#x}", input_injector_module.input_addr);
+            log::debug!("Mmap return address: {:#x}", input_injector_module.input_addr);
             SyscallHookResult::new(Some(input_injector_module.input_addr))
         } else {
             SyscallHookResult::new(None)
@@ -164,16 +164,16 @@ where
                 .get_mut::<InputInjectorModule>()
                 .expect("Failed to get InputInjectorModule");
         let addr = input_injector_module.input_addr;
-        log::info!("Munmap args: {:#x}, {:#x}", a0, a1);
+        log::debug!("Munmap args: {:#x}, {:#x}", a0, a1);
         if a0 == addr {
-            log::info!("Munmap syscall intercepted ...");
+            log::debug!("Munmap syscall intercepted ...");
             SyscallHookResult::new(Some(0))
         } else {
             SyscallHookResult::new(None)
         }
     }
     else if sys_num == SYS_exit || sys_num == SYS_exit_group {
-        log::info!("Exit / Exit group syscall intercepted ...");
+        log::debug!("Exit / Exit group syscall intercepted ...");
         
         // Simply abort() will cause the fuzzer treat it as a crash, so we need to set a flag to ignore it
         let state = _state.expect("No state found");

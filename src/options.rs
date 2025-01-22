@@ -35,8 +35,14 @@ pub struct FuzzerOptions {
     )]
     pub injections: Option<String>,
 
-    #[arg(long, help = "Log file")]
+    #[arg(long, help = "Stdout Log file (For LLMPManager)")]
     pub log: Option<String>,
+
+    #[arg(long, help = "Client Stdout log file")]
+    pub client_stdout_file: Option<String>,
+
+    #[arg(long, help = "Client Stderr log file")]
+    pub client_stderr_file: Option<String>,
 
     #[arg(long, help = "Timeout in milliseconds", default_value = "1000", value_parser = FuzzerOptions::parse_timeout)]
     pub timeout: Duration,

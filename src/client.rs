@@ -65,7 +65,6 @@ impl Client<'_> {
 
         let mut env = self.env();
         Harness::edit_env(&mut env);
-        log::debug!("ENV: {:#?}", env);
         log::debug!("Client description: {:?}", client_description);
 
         let is_asan = self.options.is_asan_core(core_id);
@@ -96,6 +95,14 @@ impl Client<'_> {
 
         let is_cmplog = self.options.is_cmplog_core(core_id);
 
+        log::debug!(
+            "core_id: {:?}, is_asan: {:?}, is_asan_guest: {:?}, is_cmplog: {:?}",
+            core_id,
+            is_asan,
+            is_asan_guest,
+            is_cmplog
+        );
+
         #[cfg(feature = "injections")]
         let extra_tokens = injection_module
             .as_ref()
@@ -117,7 +124,7 @@ impl Client<'_> {
                 .build();
             instance_builder
                 .build()
-                .run(args, tuple_list!(drcov), state)
+                .run(args, tuple_list!(drcov), state, self.options, core_id)
         } else if is_asan && is_cmplog {
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
@@ -128,12 +135,16 @@ impl Client<'_> {
                         injection_module,
                     ),
                     state,
+                    self.options,
+                    core_id,
                 )
             } else {
                 instance_builder.build().run(
                     args,
                     tuple_list!(CmpLogModule::default(), AsanModule::default(&env),),
                     state,
+                    self.options,
+                    core_id,
                 )
             }
         } else if is_asan_guest && is_cmplog {
@@ -146,12 +157,16 @@ impl Client<'_> {
                         injection_module
                     ),
                     state,
+                    self.options,
+                    core_id,
                 )
             } else {
                 instance_builder.build().run(
                     args,
                     tuple_list!(CmpLogModule::default(), AsanGuestModule::default(&env),),
                     state,
+                    self.options,
+                    core_id,
                 )
             }
         } else if is_asan {
@@ -160,6 +175,8 @@ impl Client<'_> {
                     args,
                     tuple_list!(AsanModule::default(&env), injection_module),
                     state,
+                    self.options,
+                    core_id,
                 )
             } else {
                 // Using AsanModule with report enabled
@@ -173,30 +190,32 @@ impl Client<'_> {
 
                 instance_builder
                     .build()
-                    .run(args, tuple_list!(asan_module), state)
+                    .run(args, tuple_list!(asan_module), state, self.options, core_id)
             }
         } else if is_asan_guest {
             instance_builder
                 .build()
-                .run(args, tuple_list!(AsanGuestModule::default(&env)), state)
+                .run(args, tuple_list!(AsanGuestModule::default(&env)), state, self.options, core_id)
         } else if is_cmplog {
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     args,
                     tuple_list!(CmpLogModule::default(), injection_module),
                     state,
+                    self.options,
+                    core_id
                 )
             } else {
                 instance_builder
                     .build()
-                    .run(args, tuple_list!(CmpLogModule::default()), state)
+                    .run(args, tuple_list!(CmpLogModule::default()), state, self.options, core_id)
             }
         } else if let Some(injection_module) = injection_module {
             instance_builder
                 .build()
-                .run(args, tuple_list!(injection_module), state)
+                .run(args, tuple_list!(injection_module), state, self.options, core_id)
         } else {
-            instance_builder.build().run(args, tuple_list!(), state)
+            instance_builder.build().run(args, tuple_list!(), state, self.options, core_id)
         }
     }
 }

@@ -47,14 +47,14 @@ where
     ) where
         ET: EmulatorModuleTuple<I, S>,
     {
-        log::info!("RegisterResetModule::pre_qemu_init running ...");
+        log::debug!("RegisterResetModule::pre_qemu_init running ...");
     }
 
     fn post_qemu_init<ET>(&mut self, _qemu: Qemu, _emulator_modules: &mut EmulatorModules<ET, I, S>)
     where
         ET: EmulatorModuleTuple<I, S>,
     {
-        log::info!("RegisterResetModule::post_qemu_init running ...");
+        log::debug!("RegisterResetModule::post_qemu_init running ...");
     }
 
     fn pre_exec<ET>(
@@ -66,7 +66,7 @@ where
     ) where
         ET: EmulatorModuleTuple<I, S>,
     {
-        log::info!("RegisterResetModule::pre_exec running ...");
+        log::debug!("RegisterResetModule::pre_exec running ...");
         self.restore(_qemu);
     }
 

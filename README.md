@@ -3,25 +3,32 @@ You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file
 
 # Build
 1. run `cargo make clean` to clean up all build
-2. <Optional> Modify the libafl path in `Cargo.toml`, now my libafl version is `commit d8460d14a2872d1281ac0eb55797d0dc63a2d144` 
-3. run `cargo make aarch64` to build the fuzzer and target binaries.
+2. run `cargo make aarch64` to build the fuzzer and target binaries.
 
 # Run
 ## Run the fuzzer
-```
+```bash
 RUST_LOG=info ./build/h1k0_qemu_launcher \
     --input ./corpus \
     --output ./output \
-    --log ./output/log.txt \
-    --cores 0-7 --asan-cores 0-2 --cmplog-cores 3-5 --tokens ./build/tiff.dict  -- \
-    -L ./rootfs ./build/bin/tiffinfo -Dcjrsw  ./corpus/minisblack-1c-16b.tiff
+    --cores 0-2 --asan-cores 0 --cmplog-cores 1 --tokens ./build/tiff.dict -- \
+    -L ./rootfs ./build/bin/tiffinfo -Dcjrsw ./corpus/minisblack-1c-16b.tiff
+```
+
+## Run the fuzzer with Debugging Mode
+```bash
+RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
+    --input ./corpus \
+    --output ./output \
+    --verbose --client-stdout-file ./stdout.txt --client-stderr-file ./stderr.txt \
+    --cores 0-2 --asan-cores 0 --cmplog-cores 1 --tokens ./build/tiff.dict -- \
+    -L ./rootfs ./build/bin/tiffinfo -Dcjrsw ./corpus/minisblack-1c-16b.tiff
 ```
 
 ## Verify Crashes
 1. Modify `Cargo.toml`, add `"simplemgr"` in features
 2. run following command
-
-    ```
+    ```bash
     RUST_LOG=info ./build/h1k0_qemu_launcher \
     --input ./corpus \
     --output ./output \
@@ -30,28 +37,14 @@ RUST_LOG=info ./build/h1k0_qemu_launcher \
     -L ./rootfs ./build/bin/tiffinfo -Dcjrsw <input>
     ```
 
-## Simple Manager for testing and Debugging AsanModule
-Run without asan_module
-```
-RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
-    --input ./corpus \
-    --output ./output \
-    --log ./output/log.txt \
-    --cores 0 -r ./corpus/minisblack-1c-16b.tiff -- \ 
-    ./build/bin/tiffinfo -Dcjrsw ./corpus/minisblack-1c-16b.tiff
-```
-
-Run with asan_module
-```
-RUST_BACKTRACE=full RUST_LOG=info ./build/h1k0_qemu_launcher \
-    --input ./corpus \
-    --output ./output \
-    --log ./output/log.txt \
-    --cores 0 --asan-cores 0 -r ./corpus/minisblack-1c-16b.tiff -- \
-    ./build/bin/tiffinfo -Dcjrsw ./corpus/minisblack-1c-16b.tiff
-```
-
-Only `./corpus/logluv-3c-16b.tiff` can run without unexpected input.
+## Important Arguments
+- `--verbose`: Enable verbose output (Output clients' stdout and stderr, default print to console)
+- `--client-stdout-file`: Redirect client stdout to a file (`/dev/null` is also a valid option)
+- `--client-stderr-file`: Redirect client stderr to a file (`/dev/null` is also a valid option)
+- `--log`: Redirect fuzzer log to a file
+- `--tui`: Enable TUI mode (no fuzzer log)
+- `RUST_BACKTRACE=full`: Enable backtrace, useful for debugging clients' crashes
+- `RUST_LOG=info`: Enable info level log
 
 ## (Deprecated) Testing the crashes
 1. Build with asan `ENABLE_ASAN=true cargo make x86_64`

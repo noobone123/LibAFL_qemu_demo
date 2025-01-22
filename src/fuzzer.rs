@@ -41,9 +41,8 @@ impl Fuzzer {
     }
 
     pub fn fuzz(&self) -> Result<(), Error> {
-        // This logger is different from following `log`, this logger is used for logging info in the fuzzer itself
-        // while `log` is used for logging outputs from MultiMonitor
-        // init_logger();
+        // log::info!, log::debug! ... will print log into stderr by default
+        // println! will print log into stdout
         env_logger::init();
 
         log::info!("Starting fuzzer with options: {:?}", self.options);
@@ -56,7 +55,8 @@ impl Fuzzer {
                 .build();
             self.launch(monitor)
         } else {
-            // This log is used for MultiMonitor to write fuzzing logs
+            // TODO: config log file for both stdout and stderr
+            // These logs are used by LLMPManager to write overall fuzzing logs, not client stdout/stderr
             let log = self.options.log.as_ref().and_then(|l| {
                 OpenOptions::new()
                     .append(true)
@@ -72,7 +72,7 @@ impl Fuzzer {
                 File::from_raw_fd(new_fd)
             });
 
-            // The stats reporter for the broker
+            // The stats reporter for the LLMP broker
             let monitor = MultiMonitor::new(|s| {
                 #[cfg(unix)]
                 writeln!(stdout_cpy.borrow_mut(), "{s}").unwrap();
@@ -97,11 +97,21 @@ impl Fuzzer {
 
         /* If we are running in verbose, don't provide a replacement stdout, otherwise, use /dev/null */
         #[cfg(not(feature = "simplemgr"))]
-        let stdout = if self.options.verbose {
-            None
+        let (stdout, stderr) = if !self.options.verbose {
+            // If not verbose, redirect both to /dev/null
+            (Some("/dev/null"), Some("/dev/null"))
         } else {
-            Some("/dev/null")
+            // If verbose, use specified files or None (console)
+            (
+                self.options.client_stdout_file.as_deref(),
+                self.options.client_stderr_file.as_deref()
+            )
         };
+
+        #[cfg(not(feature = "simplemgr"))]
+        log::info!("Client stdout: {:?}", stdout);
+        #[cfg(not(feature = "simplemgr"))]
+        log::info!("Client stderr: {:?}", stderr);
 
         let client = Client::new(&self.options);
 
@@ -154,7 +164,7 @@ impl Fuzzer {
             .run_client(|s, m, c| client.run(s, MonitorTypedEventManager::<_, M>::new(m), c))
             .cores(&self.options.cores)
             .stdout_file(stdout)
-            .stderr_file(stdout)
+            .stderr_file(stderr)
             .build()
             .launch()
         {

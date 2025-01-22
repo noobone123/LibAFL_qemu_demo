@@ -19,14 +19,12 @@ use libafl::{
 #[cfg(not(feature = "simplemgr"))]
 use libafl_bolts::shmem::StdShMemProvider;
 use libafl_bolts::{
-    ownedref::OwnedMutSlice,
-    rands::StdRand,
-    tuples::{tuple_list, Merge, Prepend},
+    core_affinity::CoreId, ownedref::OwnedMutSlice, rands::StdRand, tuples::{tuple_list, Merge, Prepend}
 };
 use libafl_qemu::{
     elf::EasyElf,
     modules::{
-        calls::{CallTraceCollector, FullBacktraceCollector}, cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, AsanModule, CallTracerModule, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
+        cmplog::CmpLogObserver, edges::EdgeCoverageFullVariant, utils::filters::{NopPageFilter, StdAddressFilter}, AsanModule, EdgeCoverageModule, EmulatorModule, EmulatorModuleTuple, SnapshotModule, StdEdgeCoverageModule
     },
     Emulator, GuestAddr, Qemu, QemuExecutor,
 };
@@ -108,6 +106,8 @@ impl<M: Monitor> Instance<'_, M> {
         args: Vec<String>,
         modules: ET,
         state: Option<ClientState>,
+        options: &FuzzerOptions,
+        core_id: CoreId,
     ) -> Result<(), Error>
     where
         ET: EmulatorModuleTuple<BytesInput, ClientState> + Debug,
@@ -166,15 +166,17 @@ impl<M: Monitor> Instance<'_, M> {
                 self.coverage_filter(qemu)?
         );
 
-        // update address filter after qemu has been initialized
-        <AsanModule as EmulatorModule<BytesInput, ClientState>>::update_address_filter(
-            emulator
+        if self.options.is_asan_core(core_id) {
+            // update address filter after qemu has been initialized
+            <AsanModule as EmulatorModule<BytesInput, ClientState>>::update_address_filter(
+                emulator
                 .modules_mut()
                 .get_mut::<AsanModule>()
                 .expect("Could not find back the asan module"),
-            qemu,
-            self.asan_filter(qemu)?
-        );
+                qemu,
+                self.asan_filter(qemu)?
+            );
+        }
 
         // Save the current state of the registers
         emulator

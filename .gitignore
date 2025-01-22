@@ -7,3 +7,5 @@ Cargo.lock
 stats.txt
 output/
 build/
+stdout.txt
+stderr.txt
