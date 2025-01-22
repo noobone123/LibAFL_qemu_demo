@@ -1,3 +1,6 @@
+# About
+This is a skeleton for fuzzing binary-only targets with LibAFL-qemu. The skeleton is developed based on `qemu_launcher` in `LibAFL`, with newly added features such as a custom EmulatorModule (hook) and feedback functionality.
+
 # Prepare
 You can download prebuilt rootfs for aarch64 from [https://drive.google.com/file/d/1K5Gb-S6vpLb6xmYicPKAvMJPtJ5J9xSN/view?usp=drive_link], extract the `rootfs` and put it in the current directory.
 
