@@ -97,15 +97,18 @@ impl Fuzzer {
 
         /* If we are running in verbose, don't provide a replacement stdout, otherwise, use /dev/null */
         #[cfg(not(feature = "simplemgr"))]
-        let (stdout, stderr) = if !self.options.verbose {
-            // If not verbose, redirect both to /dev/null
-            (Some("/dev/null"), Some("/dev/null"))
-        } else {
-            // If verbose, use specified files or None (console)
+        let (stdout, stderr) = if self.options.verbose {
+            // If verbose, output to console (None)
+            (None, None)
+        } else if self.options.client_stdout_file.is_some() && self.options.client_stderr_file.is_some() {
+            // If both output files specified, redirect to those files
             (
                 self.options.client_stdout_file.as_deref(),
                 self.options.client_stderr_file.as_deref()
             )
+        } else {
+            // Default case - redirect to /dev/null
+            (Some("/dev/null"), Some("/dev/null"))
         };
 
         #[cfg(not(feature = "simplemgr"))]

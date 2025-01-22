@@ -38,10 +38,10 @@ pub struct FuzzerOptions {
     #[arg(long, help = "Stdout Log file (For LLMPManager)")]
     pub log: Option<String>,
 
-    #[arg(long, help = "Client Stdout log file")]
+    #[arg(long, help = "Client Stdout log file", requires = "client_stderr_file")]
     pub client_stdout_file: Option<String>,
 
-    #[arg(long, help = "Client Stderr log file")]
+    #[arg(long, help = "Client Stderr log file", requires = "client_stdout_file")]
     pub client_stderr_file: Option<String>,
 
     #[arg(long, help = "Timeout in milliseconds", default_value = "1000", value_parser = FuzzerOptions::parse_timeout)]
@@ -62,7 +62,7 @@ pub struct FuzzerOptions {
     #[arg(long, help = "Cpu cores to use for CmpLog", value_parser = Cores::from_cmdline)]
     pub cmplog_cores: Option<Cores>,
 
-    #[clap(short, long, help = "Enable output from the fuzzer clients")]
+    #[clap(short, long, help = "Enable output from the fuzzer clients", conflicts_with_all = ["client_stdout_file", "client_stderr_file"])]
     pub verbose: bool,
 
     #[clap(long, help = "Enable AFL++ style output", conflicts_with = "verbose")]
